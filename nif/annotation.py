@@ -1,5 +1,4 @@
 import uuid
-
 import rdflib
 
 nif_ns = rdflib.namespace.ClosedNamespace(
