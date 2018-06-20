@@ -1,6 +1,6 @@
 import uuid
-import rdflib
 
+import rdflib
 
 nif_ns = rdflib.namespace.ClosedNamespace(
     uri='http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#',
@@ -78,7 +78,7 @@ class NIFAnnotation(rdflib.Graph):
     nif_classes = [nif_ns.String, nif_ns.RFC5147String]
 
     def __init__(self,
-                 begin_end_index=None, is_string=None,
+                 begin_end_index, is_string=None,
                  ta_ident_ref=None, reference_context=None,
                  uri_prefix=None, anchor_of=None,
                  **kwargs):
@@ -99,90 +99,93 @@ class NIFAnnotation(rdflib.Graph):
         :param **kwargs: any additional (predicate, object) pairs
         """
         super().__init__()
-        # Compute URI of itself
-        if begin_end_index is None:
-            if is_string is None:
-                raise ValueError(
-                    'Begin and end indices are not provided, '
-                    'hence, is_string should be provided.')
-            else:
-                begin_end_index = (0, len(is_string))
-        else:  # indices provided
-            if is_string is not None:
-                raise ValueError(
-                    'Begin and end indices are provided ({}), '
-                    'hence, is_string should be None '
-                    '(provided {})'.format(begin_end_index, is_string))
-            try:
-                begin_end_index = tuple(map(int, begin_end_index))
-            except ValueError as e:
-                raise ValueError(
-                    'begin_end_index should be convertible to integers, '
-                    '{} provided'.format(begin_end_index))
+        try:
+            begin_end_index = tuple(map(int, begin_end_index))
+        except ValueError:
+            raise ValueError(
+                'begin_end_index should be convertible to integers, '
+                '{} provided'.format(begin_end_index))
+        self.reference_context = None  # this holds a separate graph
         if reference_context is not None:  # this is a not a context
-            if not NIFContext.is_context(reference_context):
+            uri_prefix = reference_context.uri_prefix
+            self.reference_context = reference_context
+        self.uri = do_suffix_rfc5147(uri_prefix, *begin_end_index)
+        # URI obtained, set the predicate, object pairs
+        self.__setattr__('nif__begin_index', begin_end_index[0], validate=False)
+        self.__setattr__('nif__end_index', begin_end_index[1], validate=False)
+        if reference_context is not None:
+            self.__setattr__('nif__reference_context', reference_context.uri,
+                             False)
+        if is_string is not None:
+            self.__setattr__('nif__is_string', is_string, False)
+        if ta_ident_ref is not None:
+            self.__setattr__('itsrdf__ta_ident_ref', ta_ident_ref, False)
+        if anchor_of is not None:
+            self.__setattr__('nif__anchor_of', anchor_of, False)
+        self.add_nif_classes()
+        self.validate()
+        for key, val in kwargs.items():
+            self.__setattr__(key, val)
+
+    def validate(self):
+        if self.reference_context is not None:
+            if not NIFContext.is_context(self.reference_context):
                 raise ValueError(
                     'The provided reference context is not compatible with '
                     'nif.Context class.')
-            else:
-                uri_prefix = reference_context.uri
-        self.uri = do_suffix_rfc5147(uri_prefix, *begin_end_index)
-        # URI obtained, set the predicate, object pairs
-        self.nif__begin_index, self.nif__end_index = begin_end_index
-        if is_string is not None:
-            if not isinstance(is_string, str):
+        if self.nif__is_string is not None:
+            if not isinstance(self.nif__is_string, str):
                 raise TypeError('is_string value {} should be '
-                                'a string'.format(is_string))
-            if anchor_of is not None or \
-                    reference_context is not None or \
-                    ta_ident_ref is not None:
+                                'a string'.format(self.nif__is_string))
+            if int(self.nif__begin_index) != 0 or \
+                    int(self.nif__end_index) != len(self.nif__is_string):
+                raise ValueError(
+                    'Begin and end indices are provided ({}), '
+                    'but do not fit the provided string (length = {})'
+                    '.'.format((self.nif__begin_index, self.nif__end_index),
+                               len(self.nif__is_string)))
+            if self.nif__anchor_of is not None or \
+                    self.nif__reference_context is not None or \
+                    self.itsrdf__ta_ident_ref is not None:
                 raise ValueError(
                     'If is_string is provided then '
                     'ta_ident_ref, reference_context and anchor are not allowed'
                     '. You have reference context = {}, anchor = {}, '
-                    'ta_ident_ref = {}.'.format(reference_context, anchor_of, ta_ident_ref))
-            self.nif__is_string = is_string
-        if ta_ident_ref is not None:
-            if is_string is not None or \
-                    reference_context is None or \
-                    anchor_of is None:
+                    'ta_ident_ref = {}.'.format(self.nif__reference_context,
+                                                self.nif__anchor_of,
+                                                self.itsrdf__ta_ident_ref))
+        if self.itsrdf__ta_ident_ref is not None:
+            if self.nif__is_string is not None or \
+                    self.nif__reference_context is None or \
+                    self.nif__anchor_of is None:
                 raise ValueError(
                     'If identifier ta_iden_ref is provided then '
                     'reference context and anchor are required and'
                     'is_string is not allowed. You have'
                     'reference context = {}, anchor = {}, is_string = {}'
-                    '.'.format(reference_context, anchor_of, is_string)
-                )
-            self.itsrdf__ta_ident_ref = ta_ident_ref
-        if reference_context is not None:
-            if anchor_of is None:
+                    '.'.format(self.nif__reference_context,
+                               self.nif__anchor_of, self.nif__is_string))
+        if self.nif__reference_context is not None:
+            if self.nif__anchor_of is None:
                 raise ValueError('When reference context is provided, '
                                  'anchor_of is required.')
-            self.nif__reference_context = reference_context
-        if anchor_of is not None:
-            begin_index, end_index = begin_end_index
-            ref_substring = reference_context.nif__is_string[0][
-                            begin_index:end_index]
-            assert anchor_of == ref_substring, \
-                'Anchor should be equal exactly to the subtring of ' \
-                'the reference context. You have anchor = {}, ' \
-                'substring in ref context = {}'.format(
-                    anchor_of, ref_substring)
-            self.nif__anchor_of = anchor_of
-        self.add_nif_classes()
-        for key, val in kwargs.items():
-            self.__setattr__(key, val)
 
     def __getattr__(self, name):
         if name.startswith("_"):
-            return super().__getattr__(name)
+            return super().__getattribute__(name)
         elif '__' in name:
             predicate = _parse_attr_name(name)
-            return list(self.objects(subject=self.uri, predicate=predicate))
+            rs = list(self.objects(subject=self.uri, predicate=predicate))
+            if len(rs) == 1:
+                return rs.pop()
+            elif len(rs) == 0:
+                return None
+            else:
+                return rs
         else:
-            return super().__getattr__(name)
+            return super().__getattribute__(name)
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name, value, validate=True):
         if name.startswith("_"):
             super().__setattr__(name, value)
         elif '__' in name:
@@ -196,6 +199,8 @@ class NIFAnnotation(rdflib.Graph):
                     self.add((self.uri, predicate, val_item))
             else:
                 self.set((self.uri, predicate, value))
+            if validate:
+                self.validate()
         else:
             super().__setattr__(name, value)
 
@@ -209,13 +214,16 @@ class NIFContext(NIFAnnotation):
     nif_classes = [nif_ns.Context, nif_ns.RFC5147String]
 
     def __init__(self, is_string, uri_prefix):
-        super().__init__(is_string=is_string,
-                         uri_prefix=uri_prefix)
+        begin_end_index = (0, len(is_string))
+        super().__init__(
+            begin_end_index=begin_end_index,
+            is_string=is_string,
+            uri_prefix=uri_prefix)
+        self.uri_prefix = uri_prefix
 
     @staticmethod
     def is_context(cxt):
-        classes = list(cxt.rdf__type)
-        return nif_ns.Context in classes
+        return isinstance(cxt, NIFContext)
 
 
 class NIFStructure(NIFAnnotation):
@@ -224,7 +232,24 @@ class NIFStructure(NIFAnnotation):
     def __init__(self, reference_context, begin_end_index, anchor_of, **kwargs):
         super().__init__(
             reference_context=reference_context,
-            begin_end_index=begin_end_index, anchor_of=anchor_of, **kwargs)
+            begin_end_index=begin_end_index, anchor_of=anchor_of,
+            **kwargs)
+
+    def validate(self):
+        super().validate()
+        if self.nif__anchor_of is not None:
+            ref_substring = self.reference_context.nif__is_string[
+                            int(self.nif__begin_index):int(self.nif__end_index)]
+            if self.nif__anchor_of.toPython() != ref_substring:
+                raise ValueError(
+                    'Anchor should be equal exactly to the subtring of '
+                    'the reference context. You have anchor = "{}", ' \
+                    'substring in ref context = "{}"'.format(
+                    self.nif__anchor_of, ref_substring))
+
+    @staticmethod
+    def is_structure(struct):
+        return isinstance(struct, NIFStructure)
 
 
 class NIFPhrase(NIFStructure):
@@ -245,44 +270,72 @@ class NIFExtractedEntity(NIFPhrase):
 
 
 class NIFDocument:
-    def __init__(self, text, uri="http://example.doc/"+str(uuid.uuid4())):
-        self.uri_prefix = uri
-        self.context = NIFContext(is_string=text,
-                                  uri_prefix=uri)
-        self.structures = []
+    def __init__(self, context, structures):
+        if not NIFContext.is_context(context):
+            raise TypeError('The provided context {} is not a NIFContext'
+                            '.'.format(context))
+        self.context = context
+        self.uri_prefix = context.uri_prefix
+        self.structures = structures
         self.rdf = rdflib.Graph()
         self.rdf += self.context
-        # super().__init__()
+        self.validate()
 
-    def add_structure(self):
-        # struct = NIFStructure()
-        # self.structures.append(struct)
-        # self.rdf += struct
-        pass
+    def validate(self):
+        for struct in self.structures:
+            if not NIFStructure.is_structure(struct):
+                raise TypeError('The provided structure {} is not a '
+                                'NIFStructure.'.format(struct))
+            if struct.nif__reference_context != self.context.uri:
+                raise ValueError('The reference context {} for the structure {} '
+                                 'is different from the context {} of the '
+                                 'document.'.format(
+                                     struct.nif__reference_context,
+                                     struct.uri, self.context.uri))
 
-    def add_phrase(self):
-        pass
+    @classmethod
+    def from_text(cls, text, uri="http://example.doc/"+str(uuid.uuid4())):
+        cxt = NIFContext(is_string=text, uri_prefix=uri)
+        return cls(context=cxt, structures=[])
 
-    def add_extracted_entity(self):
-        self.add_phrase()
+    def add_structure(self, struct):
+        self.structures.append(struct)
+        try:
+            self.validate()
+        except (ValueError, TypeError) as e:
+            self.structures.pop()
+            raise e
+        else:
+            self.rdf += struct
+        return self
+
+    def add_phrase(self, phrase):
+        self.add_structure(phrase)
+
+    def add_extracted_entity(self, ee):
+        self.add_phrase(ee)
 
     def serialize(self, format="xml"):
         return self.rdf.serialize(format=format)
 
     @classmethod
     def parse(cls, rdf):
-        out = cls('bla')
-        out.rdf.parse(rdf)
-        out.structures = []
+        # TODO
+        context = NIFDocument.extract_context(rdf)
+        phrases = NIFDocument.extract_phrases(rdf)
+        out = cls(context=context, structures=phrases)
         return out
 
-    def extract_phrases(self, rdf):
+    @staticmethod
+    def extract_phrases(rdf):
+        # TODO
         rdf_graph = rdflib.Graph.parse(rdf)
-        for triple in rdf_graph[:rdflib.RDFS.type:nif_ns.Phrase]:
-            phrase_uri = triple[0]
+        for phrase_uri in rdf_graph[:rdflib.RDFS.type:nif_ns.Phrase]:
             phrase_triples = rdf_graph[phrase_uri::]
 
-# a = NIFContext('bla')
-# print(type(a))
-# p = NIFPhrase()
-# p.begin_index = 56
+    @staticmethod
+    def extract_context(rdf):
+        # TODO
+        rdf_graph = rdflib.Graph.parse(rdf)
+        for context_uri in rdf_graph[:rdflib.RDFS.type:nif_ns.Context]:
+            context_triples = rdf_graph[context_uri::]
