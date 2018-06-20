@@ -315,6 +315,27 @@ class NIFDocument:
     def add_extracted_entity(self, ee):
         self.add_phrase(ee)
 
+    def add_extracted_cpt(self, cpt_dict):
+        """
+        :param cpt_dict: expected to have 'uri',
+            'matchings'-> [{'matchedText': value,
+                            'positions': [(begin, end), ...]},
+                           ...]
+        :return: self
+        """
+        cpt_uri = cpt_dict['uri']
+        for matches in cpt_dict['matchings']:
+            surface_form = matches['matchedText']
+            for match in matches['positions']:
+                ee = NIFExtractedEntity(
+                    reference_context=self.context,
+                    begin_end_index=match,
+                    anchor_of=surface_form,
+                    entity_uri=cpt_uri
+                )
+                self.add_extracted_entity(ee)
+        return self
+
     def serialize(self, format="xml"):
         return self.rdf.serialize(format=format)
 

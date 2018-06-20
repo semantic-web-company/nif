@@ -137,3 +137,13 @@ class TestDocument:
         with nose.tools.assert_raises(ValueError):
             d.add_extracted_entity(self.ee2)
 
+    def test_add_cpt(self):
+        cpt = {
+            'uri': 'http://some.uri',
+            'matchings': [
+                {'matchedText': 'larger', 'positions': [(5,11)]},
+                {'matchedText': 'this', 'positions': [(21, 25), (41, 45)]}
+            ]
+        }
+        d = NIFDocument(context=self.cxt, structures=[])
+        d.add_extracted_cpt(cpt)
