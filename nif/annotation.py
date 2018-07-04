@@ -324,11 +324,11 @@ class NIFDocument:
         """
         cpt_uri = cpt_dict['uri']
         for matches in cpt_dict['matchings']:
-            surface_form = matches['matchedText']
+            surface_form = matches['text']
             for match in matches['positions']:
                 ee = NIFExtractedEntity(
                     reference_context=self.context,
-                    begin_end_index=match,
+                    begin_end_index=(match[0], match[1]+1),
                     anchor_of=surface_form,
                     entity_uri=cpt_uri
                 )
