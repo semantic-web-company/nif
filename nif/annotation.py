@@ -239,7 +239,8 @@ class NIFStructure(NIFAnnotation):
         if self.nif__anchor_of is not None:
             ref_substring = self.reference_context.nif__is_string[
                             int(self.nif__begin_index):int(self.nif__end_index)]
-            if self.nif__anchor_of.toPython() != ref_substring:
+            # Extractor returns different capitalization in matches! 
+            if self.nif__anchor_of.toPython().lower() != ref_substring.lower():
                 raise ValueError(
                     'Anchor should be equal exactly to the subtring of '
                     'the reference context. You have anchor = "{}", ' \
