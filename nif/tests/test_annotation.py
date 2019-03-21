@@ -117,6 +117,15 @@ class TestDocument:
         d = NIFDocument(context=self.cxt, structures=[self.ee])
         assert d.structures == [self.ee]
 
+    def test_create_from_ttl(self):
+        d = NIFDocument(context=self.cxt, structures=[self.ee])
+        ttl_text = d.serialize("ttl").decode("utf-8")
+        d2 = NIFDocument.parse_rdf(ttl_text)
+        parsed_triples = [tri for tri in d2.rdf[::]]
+        for s,p,o in d.rdf[::]:
+            assert (s,p,o) in  parsed_triples
+        assert d.structures == [self.ee]
+
     def test_not_create_with_wrong_ref_cxt(self):
         with nose.tools.assert_raises(ValueError):
             NIFDocument(context=self.cxt, structures=[self.ee2])

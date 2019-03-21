@@ -1,4 +1,6 @@
+import re
 import uuid
+
 import rdflib
 
 nif_ns = rdflib.namespace.ClosedNamespace(
@@ -31,6 +33,25 @@ nif_ns = rdflib.namespace.ClosedNamespace(
 )
 itsrdf_ns = rdflib.Namespace(
     'https://www.w3.org/2005/11/its/rdf-content/its-rdf.html#')
+
+
+def extract_subgraph(rdf, uri_starting_node, whole_graph,
+                     ignore_predicates=[nif_ns.referenceContext]):
+    if type(uri_starting_node) != rdflib.URIRef:
+        uri_starting_node = rdflib.URIRef(uri_starting_node)
+    these_so = rdf.predicate_objects(uri_starting_node)
+    current_size = len(whole_graph)
+    objects = []
+    for p, o in these_so:
+        whole_graph.add((uri_starting_node, p, o))
+        new_size = len(whole_graph)
+        if new_size > current_size:
+            current_size = new_size
+            if type(o) == rdflib.URIRef and p not in ignore_predicates:
+                objects.append(o)
+    for o in objects:
+        whole_graph = extract_subgraph(rdf, o, whole_graph=whole_graph)
+    return whole_graph
 
 
 def do_suffix_rfc5147(uri, begin_index, end_index):
@@ -245,7 +266,7 @@ class NIFStructure(NIFAnnotation):
                     'Anchor should be equal exactly to the subtring of '
                     'the reference context. You have anchor = "{}", ' \
                     'substring in ref context = "{}"'.format(
-                    self.nif__anchor_of, ref_substring))
+                        self.nif__anchor_of, ref_substring))
 
     @staticmethod
     def is_structure(struct):
@@ -290,11 +311,11 @@ class NIFDocument:
                 raise ValueError('The reference context {} for the structure {} '
                                  'is different from the context {} of the '
                                  'document.'.format(
-                                     struct.nif__reference_context,
-                                     struct.uri, self.context.uri))
+                    struct.nif__reference_context,
+                    struct.uri, self.context.uri))
 
     @classmethod
-    def from_text(cls, text, uri="http://example.doc/"+str(uuid.uuid4())):
+    def from_text(cls, text, uri="http://example.doc/" + str(uuid.uuid4())):
         cxt = NIFContext(is_string=text, uri_prefix=uri)
         return cls(context=cxt, structures=[])
 
@@ -329,34 +350,83 @@ class NIFDocument:
             for match in matches['positions']:
                 ee = NIFExtractedEntity(
                     reference_context=self.context,
-                    begin_end_index=(match[0], match[1]+1),
+                    begin_end_index=(match[0], match[1] + 1),
                     anchor_of=surface_form,
                     entity_uri=cpt_uri
                 )
                 self.add_extracted_entity(ee)
         return self
 
-    def serialize(self, format="xml"):
-        return self.rdf.serialize(format=format)
+    def serialize(self, format="xml", uri_format=nif_ns.RFC5147String):
+        if uri_format not in [nif_ns.OffsetBasedString, nif_ns.RFC5147String]:
+            raise ValueError("Only RFC5147 and OffsetBased strings are currently soported URI schemes")
+        rdf_text = self.rdf.serialize(format=format)
+
+        if uri_format == nif_ns.OffsetBasedString:
+            regex_RFC5147_suffix = r"\#char\=\((\d*),(\d*)\)"
+            subst_str = r"/#offset_\1_\2"
+            rdf_text = re.sub(regex_RFC5147_suffix, subst_str, rdf_text)
+
+        return rdf_text
 
     @classmethod
-    def parse(cls, rdf):
-        # TODO
-        context = NIFDocument.extract_context(rdf)
-        phrases = NIFDocument.extract_phrases(rdf)
-        out = cls(context=context, structures=phrases)
+    def parse_rdf(cls, rdf_text, format="n3"):
+        rdf_graph = rdflib.Graph()
+        rdf_graph.parse(data=rdf_text, format=format)
+        context = NIFDocument.extract_context(rdf_graph)
+        structures = NIFDocument.extract_phrases(rdf_graph, context)
+        out = cls(context=context, structures=[])
+        for st in structures:
+            out.add_structure(st)
         return out
 
     @staticmethod
-    def extract_phrases(rdf):
-        # TODO
-        rdf_graph = rdflib.Graph.parse(rdf)
-        for phrase_uri in rdf_graph[:rdflib.RDFS.type:nif_ns.Phrase]:
-            phrase_triples = rdf_graph[phrase_uri::]
+    def extract_phrases(rdf_graph,context):
+        structures = []
+        for phrase_uri in rdf_graph[:rdflib.RDF.type:nif_ns.Phrase]:
+            phrase_rdf = extract_subgraph(rdf_graph, phrase_uri, whole_graph=rdflib.Graph())
+            begin_index = [c for c in phrase_rdf[phrase_uri:nif_ns.beginIndex:]][0]
+            end_index = [c for c in phrase_rdf[phrase_uri:nif_ns.endIndex:]][0]
+            begin_end_index = (begin_index, end_index)
+            anchor_of = None
+            try:
+                anchor_of = [c for c in phrase_rdf[phrase_uri:nif_ns.anchorOf:]][0]
+            except:
+                pass
+
+            # This library uses RFC5147 URI's, maybe the file had other URIs
+            new_uri = do_suffix_rfc5147(context.uri_prefix,begin_index,end_index)
+            uris_are_RFC5147 = new_uri == phrase_uri
+            if not uris_are_RFC5147:
+                #print("will replace: ",phrase_uri,"->",new_uri)
+                new_phrase_rdf = rdflib.Graph()
+                for s,p,o in phrase_rdf[::]:
+                    if s==phrase_uri:
+                        s = do_suffix_rfc5147(new_uri, begin_index, end_index)
+                    new_phrase_rdf.add((s,p,o))
+                phrase_rdf=new_phrase_rdf
+
+            # We remove all reference in phrase_rdf to the original reference context, as these might conflict with
+            # those created with the NIFStructure contructor
+            for s,o in phrase_rdf[:nif_ns.referenceContext:]:
+                phrase_rdf.remove((s,nif_ns.referenceContext,o))
+
+            structure = NIFStructure(context, begin_end_index, anchor_of)
+            structure+=phrase_rdf
+            structures.append(structure)
+        return structures
 
     @staticmethod
-    def extract_context(rdf):
-        # TODO
-        rdf_graph = rdflib.Graph.parse(rdf)
-        for context_uri in rdf_graph[:rdflib.RDFS.type:nif_ns.Context]:
+    def extract_context(rdf_graph):
+        for context_uri in rdf_graph[:rdflib.RDF.type:nif_ns.Context]:
             context_triples = rdf_graph[context_uri::]
+            base_uri = str(context_uri).split("#")[0]
+            for text in rdf_graph[context_uri:nif_ns.isString:]:
+                try:
+                    ctx = NIFContext(
+                        is_string=text,
+                        uri_prefix=base_uri)
+                    return ctx
+                except:
+                    continue
+        raise ValueError("Nif file contains no context")
