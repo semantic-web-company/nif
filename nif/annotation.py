@@ -366,7 +366,6 @@ class NIFDocument:
             regex_RFC5147_suffix = r"\#char\=\((\d*),(\d*)\)"
             subst_str = r"/#offset_\1_\2"
             rdf_text = re.sub(regex_RFC5147_suffix, subst_str, rdf_text)
-
         return rdf_text
 
     @classmethod
@@ -419,7 +418,6 @@ class NIFDocument:
     @staticmethod
     def extract_context(rdf_graph):
         for context_uri in rdf_graph[:rdflib.RDF.type:nif_ns.Context]:
-            context_triples = rdf_graph[context_uri::]
             base_uri = str(context_uri).split("#")[0]
             for text in rdf_graph[context_uri:nif_ns.isString:]:
                 try:
