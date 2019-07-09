@@ -29,6 +29,9 @@ nif_ns = rdflib.namespace.ClosedNamespace(
         "head", "isString", "lemma", "literalAnnotation", "confidence",
         "keyword", "topic", "endIndex", "before", "posTag", "beginIndex",
         "sentimentValue",
+
+        #new ObjectProperty
+        "summary"
     ]
 )
 itsrdf_ns = rdflib.Namespace(
@@ -80,9 +83,12 @@ class NIFAnnotation(rdflib.Graph):
     nif_classes = [nif_ns.String, nif_ns.OffsetBasedString]
 
     def __init__(self,
-                 begin_end_index, is_string=None,
-                 ta_ident_ref=None, reference_context=None,
-                 uri_prefix=None, anchor_of=None,
+                 begin_end_index,
+                 is_string=None,
+                 ta_ident_ref=None,
+                 reference_context=None,
+                 uri_prefix=None,
+                 anchor_of=None,
                  **kwargs):
         """
         A class to store NIF annotation block for a single entity. Hence,
@@ -215,39 +221,6 @@ class NIFAnnotation(rdflib.Graph):
     def from_triples(cls, rdf_graph, ref_cxt):
         raise NotImplementedError
 
-    # @classmethod
-    # def from_triples(cls, rdf):
-    #     kwargs = dict()
-    #     other_triples = rdflib.Graph()
-    #     for s, p, o in rdf:
-    #         if p == nif_ns.beginIndex:
-    #             kwargs['begin_index'] = int(o.toPython())
-    #         elif p == nif_ns.endIndex:
-    #             kwargs['end_index'] = int(o.toPython())
-    #         elif p == nif_ns.referenceContext:
-    #             ref_cxt_uri = o
-    #         elif p == nif_ns.isString:
-    #             kwargs['is_string'] = o.toPython()
-    #         elif p == nif_ns.anchorOf:
-    #             kwargs['anchor_of'] = o.toPython()
-    #         elif p == itsrdf_ns.taIdentRef:
-    #             kwargs['ta_ident_ref'] = o
-    #         else:
-    #             other_triples.add((s, p, o))
-    #     uri_prefix = s.toPython()
-    #     kwargs['begin_end_index'] = kwargs['begin_index'], kwargs['end_index']
-    #     del kwargs['begin_index']
-    #     del kwargs['end_index']
-    #     if cls == NIFContext:
-    #         del kwargs['begin_end_index']
-    #     out = cls(uri_prefix=uri_prefix, **kwargs)
-    #     try:
-    #         out.__setattr__('nif__reference_context', ref_cxt_uri, False)
-    #     except UnboundLocalError:
-    #         pass
-    #     out += other_triples
-    #     return out
-
 
 class NIFContext(NIFAnnotation):
     nif_classes = [nif_ns.Context, nif_ns.OffsetBasedString]
@@ -271,7 +244,7 @@ class NIFContext(NIFAnnotation):
         for s, p, o in rdf_graph:
             if p == nif_ns.isString:
                 if 'is_string' in kwargs:
-                    raise ValueError(f'{p} found twice.')
+                    raise ValueError('{} found twice.'.format(p))
                 kwargs['is_string'] = o.toPython()
             elif p == nif_ns.beginIndex:
                 begin_index = int(o.toPython())
@@ -284,7 +257,7 @@ class NIFContext(NIFAnnotation):
         out = cls(uri_prefix=uri_prefix, **kwargs)
         if (int(out.nif__begin_index) != begin_index or
                 int(out.nif__end_index) != end_index):
-            raise ValueError(f'Check the provided begin and end indices!')
+            raise ValueError('Check the provided begin and end indices!')
         out += other_triples
         return out
 
@@ -527,3 +500,52 @@ class NIFDocument:
 #     for o in objects:
 #         whole_graph = extract_subgraph(rdf, o, whole_graph=whole_graph)
 #     return whole_graph
+
+if __name__ == '__main__':
+    rdf_to_parse = '''
+    @prefix dbo:   <http://dbpedia.org/ontology/> .
+    @prefix geo:   <http://www.w3.org/2003/01/geo/wgs84_pos/> .
+    @prefix dktnif: <http://dkt.dfki.de/ontologies/nif#> .
+    @prefix nif-ann: <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-annotation#> .
+    @prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+    @prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+    @prefix itsrdf: <https://www.w3.org/2005/11/its/rdf-content/its-rdf.html#> .
+    @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix nif:   <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#> .
+
+    <http://dkt.dfki.de/documents#offset_11_17>
+            a                     nif:RFC5147String , nif:String , nif:Structure ;
+            nif:anchorOf          "Berlin" ;
+            nif:beginIndex        "11"^^xsd:nonNegativeInteger ;
+            nif:endIndex          "17"^^xsd:nonNegativeInteger ;
+            nif:referenceContext  <http://dkt.dfki.de/documents#offset_0_26> ;
+            itsrdf:taClassRef     dbo:Location ;
+            itsrdf:taIdentRef     <http://www.wikidata.org/entity/Q64> ;
+            itsrdf:taIdentRef     []  .
+
+    <http://dkt.dfki.de/documents#offset_0_26>
+            a               nif:RFC5147String , nif:String , nif:Context ;
+            nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
+            nif:endIndex    "26"^^xsd:nonNegativeInteger ;
+            nif:isString    "Welcome to Berlin in 2016." .
+    '''
+    #
+    # print(f'Input: {rdf_to_parse}')
+    # parsed = NIFDocument.parse_rdf(rdf_to_parse, format='turtle')
+    # print(f'Parsed into NIFDocument')
+    # context_str = parsed.context.nif__is_string
+    # print(f'The nif:isString value: "{context_str}"')
+    # structs = parsed.structures
+    # print(f'Number of structures attached: {len(structs)}')
+    # assert len(structs) == 1
+    # struct = structs[0]
+    # print(f'nif:anchorOf: "{struct.nif__anchor_of}", '
+    #       f'itsrdf:taClassRef: "{struct.itsrdf__ta_class_ref}"')
+
+    nifDocument = rdf_to_parse
+    d = NIFDocument.parse_rdf(nifDocument, format='turtle')
+    ann = NIFAnnotation(begin_end_index=(0, len(d.context.nif__is_string)))
+    ann.nif__summary = "<your summary here>"
+    d.add_phrase(ann)
+
+
