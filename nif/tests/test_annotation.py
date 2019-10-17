@@ -2,49 +2,151 @@ import os
 from collections import Counter
 
 import nose
+from nose.tools import assert_raises
 
 from nif.annotation import *
 
 
+class TestNIFString:
+    def setUp(self):
+        self.text = 'some larger context. this is a phrase in this context.'
+
+    def test_setattr(self):
+        nif_str = NIFContext(is_string=self.text,
+                             uri_prefix='http://example.com')
+        end_index = len(self.text)
+        assert str(nif_str.uri) == f'http://example.com#offset_0_{end_index}', \
+            nif_str.uri
+        title_str = 'prefLabel'
+        nif_str.rdfs__label = title_str
+        rdf_title = nif_str.value(predicate=rdflib.RDFS.label,
+                                  subject=nif_str.uri)
+        assert str(rdf_title) == title_str
+        nif_str.rdfs__label = [title_str, title_str+'a']
+        with assert_raises(rdflib.exceptions.UniquenessError):
+            rs = nif_str.value(predicate=rdflib.RDFS.label,
+                               subject=nif_str.uri,
+                               any=False)
+        objs = nif_str.objects(predicate=rdflib.RDFS.label,
+                               subject=nif_str.uri)
+        assert len(list(objs)) == 2
+        nif_str.rdfs__label = []
+        rdf_title = nif_str.value(predicate=rdflib.RDFS.label,
+                                  subject=nif_str.uri)
+        assert rdf_title is None
+
+    def test_addattr(self):
+        nif_str = NIFContext(is_string=self.text,
+                             uri_prefix='http://example.com')
+        end_index = len(self.text)
+        assert str(nif_str.uri) == f'http://example.com#offset_0_{end_index}', \
+            nif_str.uri
+        title_str = 'prefLabel'
+        nif_str.addattr('rdfs__label', title_str)
+        rdf_title = nif_str.value(predicate=rdflib.RDFS.label,
+                                  subject=nif_str.uri)
+        assert str(rdf_title) == title_str
+        nif_str.addattr('rdfs__label', title_str+'a')
+        with assert_raises(rdflib.exceptions.UniquenessError):
+            rs = nif_str.value(predicate=rdflib.RDFS.label,
+                               subject=nif_str.uri,
+                               any=False)
+        objs = nif_str.objects(predicate=rdflib.RDFS.label,
+                               subject=nif_str.uri)
+        assert len(list(objs)) == 2
+        nif_str.addattr('rdfs__label', [title_str + 'b', title_str + 'c'])
+        objs = nif_str.objects(predicate=rdflib.RDFS.label,
+                               subject=nif_str.uri)
+        assert len(list(objs)) == 4
+        nif_str.addattr('rdfs__label', [])
+        rdf_title = nif_str.value(predicate=rdflib.RDFS.label,
+                                  subject=nif_str.uri)
+        assert rdf_title is not None, rdf_title
+
+    def test_delattr(self):
+        nif_str = NIFContext(is_string=self.text,
+                             uri_prefix='http://example.com')
+        end_index = len(self.text)
+        assert str(nif_str.uri) == f'http://example.com#offset_0_{end_index}', \
+            nif_str.uri
+        title_str = 'prefLabel'
+        nif_str.addattr('rdfs__label', title_str)
+        nif_str.delattr('rdfs__label', title_str)
+        assert nif_str.rdfs__label is None
+
+        nif_str.addattr('rdfs__label',
+                        [title_str+'a', title_str + 'b', title_str + 'c'])
+        nif_str.delattr('rdfs__label', [title_str + 'a', title_str + 'b'])
+        assert str(nif_str.rdfs__label) == title_str+'c', nif_str.rdfs__label
+
+
 class TestAnnotation:
     def setUp(self):
+        self.text = 'Vodka and a Martini go to a bar and this is English and Alex is a name and sepsis is a disease.'
         self.cxt = NIFContext(
-            is_string='some larger context. this is a phrase in this context.',
+            is_string=self.text,
             uri_prefix="http://some.doc/"+str(uuid.uuid4())
         )
 
     def test_context_created(self):
         text = 'some string. some other string.'
-        ann = NIFAnnotation(
-            begin_end_index=(0, len(text)), is_string=text,
-            ta_ident_ref=None, reference_context=None,
-            uri_prefix="http://example.doc/"+str(uuid.uuid4()),
-            anchor_of=None)
-        assert len(ann) > 0
-        subject_uri = ann.value(predicate=nif_ns.isString,
+        cxt = NIFContext(
+            is_string=text,
+            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+        )
+        subject_uri = cxt.value(predicate=nif_ns.isString,
                                 object=rdflib.Literal(text))
-        assert subject_uri, ann.serialize(format='n3')
-        assert subject_uri == ann.uri
+        assert subject_uri, cxt.serialize(format='n3')
+        assert subject_uri == cxt.uri
 
     def test_context_additional_attributes(self):
         text = 'some string. some other string.'
+        cxt = NIFContext(
+            is_string=text,
+            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+        )
         ann = NIFAnnotation(
             begin_end_index=(0, len(text)), is_string=text,
-            ta_ident_ref=None, reference_context=None,
-            uri_prefix="http://example.doc/" + str(uuid.uuid4()),
-            anchor_of=None, nif__keyword='keyword')
+            ta_ident_ref=None, reference_context=cxt,
+            anchor_of=text, nif__keyword='keyword')
         kw = ann.value(predicate=nif_ns.keyword, subject=ann.uri)
         assert kw, kw
         assert kw.toPython() == 'keyword', kw
 
-    def test_phrase(self):
+    def test_wrong_anchor(self):
         text = 'this is a phrase'
-        ann = NIFAnnotation(
-            begin_end_index=(21, 37), is_string=None,
-            ta_ident_ref=None, reference_context=self.cxt,
-            uri_prefix=None, anchor_of=text)
-        assert len(ann) > 0
-        assert ann.uri.startswith(self.cxt.uri.toPython()[:10])
+        with nose.tools.assert_raises(ValueError):
+            NIFAnnotation(
+                begin_end_index=(0, 4),
+                reference_context=self.cxt,
+                anchor_of=text)
+
+    def test_annotation_unit(self):
+        au1_dict = {
+            "nif__confidence": 1.0,
+            "itsrdf__ta_class_ref": "schema:Person",
+            "rdf__type": "nif:EntityOccurrence"
+        }
+        au1 = NIFAnnotationUnit()
+        for p, o in au1_dict.items():
+            au1.__setattr__(p, o)
+        au2_dict = {
+            "nif__confidence": 0.2,
+            "rdf__type": "nif:TermOccurrence"
+        }
+        au2 = NIFAnnotationUnit()
+        for p, o in au2_dict.items():
+            au2.__setattr__(p, o)
+        ann_alex = NIFAnnotation(
+            begin_end_index=(56, 60),
+            reference_context=self.cxt,
+            anchor_of="Alex",
+            annotation_units=[au1, au2]
+        )
+        assert len(ann_alex.annotation_units) == 2
+        assert float(ann_alex.annotation_units[au1.uri].nif__confidence) == 1.0, ann_alex.annotation_units[au1.uri].nif__confidence
+        ann_alex.remove_annotation_unit(au1.uri)
+        assert len(ann_alex.annotation_units) == 1
 
 
 class TestContext:
@@ -132,15 +234,15 @@ class TestDocument:
             entity_uri=ex_uri)
 
     def test_create_doc(self):
-        d = NIFDocument(context=self.cxt, structures=[])
+        d = NIFDocument(context=self.cxt, annotations=[])
         assert d.context == self.cxt
 
     def test_create_with_struct(self):
-        d = NIFDocument(context=self.cxt, structures=[self.ee])
-        assert d.structures == [self.ee]
+        d = NIFDocument(context=self.cxt, annotations=[self.ee])
+        assert d.annotations == [self.ee]
 
     def test_create_from_ttl(self):
-        d = NIFDocument(context=self.cxt, structures=[self.ee])
+        d = NIFDocument(context=self.cxt, annotations=[self.ee])
         ttl_text = d.serialize("ttl").decode("utf-8")
         d2 = NIFDocument.parse_rdf(ttl_text)
         parsed_triples = set(d2.rdf)
@@ -148,11 +250,11 @@ class TestDocument:
                                                    len(d.rdf))
         for s,p,o in d.rdf:
             assert (s,p,o) in parsed_triples, (s,p,o)
-        assert d.structures == [self.ee]
+        assert d.annotations == [self.ee]
 
     def test_not_create_with_wrong_ref_cxt(self):
         with nose.tools.assert_raises(ValueError):
-            NIFDocument(context=self.cxt, structures=[self.ee2])
+            NIFDocument(context=self.cxt, annotations=[self.ee2])
 
     def test_create_from_text(self):
         d = NIFDocument.from_text(self.txt, self.uri_prefix)
@@ -162,11 +264,11 @@ class TestDocument:
         assert d.context.uri.startswith(self.uri_prefix)
 
     def test_add_struct(self):
-        d = NIFDocument(context=self.cxt, structures=[])
+        d = NIFDocument(context=self.cxt, annotations=[])
         d.add_extracted_entity(self.ee)
 
     def test_not_add_invalid_struct(self):
-        d = NIFDocument(context=self.cxt, structures=[])
+        d = NIFDocument(context=self.cxt, annotations=[])
         with nose.tools.assert_raises(ValueError):
             d.add_extracted_entity(self.ee2)
 
@@ -178,7 +280,7 @@ class TestDocument:
                 {'text': 'this', 'positions': [(21, 25), (41, 45)]}
             ]
         }
-        d = NIFDocument(context=self.cxt, structures=[])
+        d = NIFDocument(context=self.cxt, annotations=[])
         d.add_extracted_cpt(cpt)
 
 
