@@ -196,7 +196,7 @@ class TestExtractedEntity:
             anchor_of='some',
             entity_uri=ex_uri
         )
-        ta_ident_ref = ee.itsrdf__ta_ident_ref
+        ta_ident_ref = next(iter(ee.annotation_units.values())).itsrdf__ta_ident_ref
         assert str(ta_ident_ref) == ex_uri, ta_ident_ref
 
     def test_phrase_mutations_check(self):
@@ -249,7 +249,8 @@ class TestDocument:
         assert len(parsed_triples) >= len(d.rdf), (len(parsed_triples),
                                                    len(d.rdf))
         for s,p,o in d.rdf:
-            assert (s,p,o) in parsed_triples, (s,p,o)
+            if not isinstance(s, rdflib.BNode) and not isinstance(o, rdflib.BNode):
+                assert (s,p,o) in parsed_triples, (s,p,o)
         assert d.annotations == [self.ee]
 
     def test_not_create_with_wrong_ref_cxt(self):

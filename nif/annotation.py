@@ -159,7 +159,7 @@ class RDFGetSetMixin(rdflib.Graph):
 class NIFAnnotationUnit(RDFGetSetMixin):
     nif_classes = [nif_ns.AnnotationUnit]
 
-    def __init__(self, uri: str = None, po_dict: dict = None):
+    def __init__(self, uri: str = None, **kwargs):
         """
         :param str uri: URI of this AU
         :param dict po_dict: predict to object dict. predicates are URIRefs
@@ -169,11 +169,13 @@ class NIFAnnotationUnit(RDFGetSetMixin):
             self.uri = rdflib.BNode()
         else:
             self.uri = uri
-        if po_dict is None:
-            po_dict = dict()
-        for p, o in po_dict.items():
-            assert isinstance(p, rdflib.URIRef), '{} is not a URIRef'.format(p)
-            self.add((self.uri, p, to_rdf_literal(o)))
+        for p, o in kwargs.items():
+            if '__' in p:
+                p_uri = _parse_attr_name(p)
+            else:
+                p_uri = p
+                assert isinstance(p_uri, rdflib.URIRef), '{} is not a URIRef'.format(p)
+            self.add((self.uri, p_uri, to_rdf_literal(o)))
 
     def validate(self):
         return True
@@ -216,52 +218,6 @@ class NIFString(RDFGetSetMixin):
         self.add_nif_classes()
         for key, val in kwargs.items():
             self.__setattr__(key, val)
-
-    # def __getattr__(self, name):
-    #     if name.startswith("_"):
-    #         return super().__getattribute__(name)
-    #     elif '__' in name:
-    #         predicate = _parse_attr_name(name)
-    #         rs = list(self.objects(subject=self.uri, predicate=predicate))
-    #         if len(rs) == 1:
-    #             return rs.pop()
-    #         elif len(rs) == 0:
-    #             return None
-    #         else:
-    #             return rs
-    #     else:
-    #         return super().__getattribute__(name)
-    #
-    # def __setattr__(self, name, value, validate=True):
-    #     if name.startswith("_"):
-    #         super().__setattr__(name, value)
-    #     elif '__' in name:
-    #         predicate = _parse_attr_name(name)
-    #         if isinstance(value, (list, tuple)):
-    #             self.remove((self.uri, predicate, None))
-    #             rs = list(self.objects(subject=self.uri, predicate=predicate))
-    #             for r in rs:
-    #                 self.remove((self.uri, predicate, r))
-    #             for val_item in value:
-    #                 self.add((self.uri, predicate, to_rdf_literal(val_item)))
-    #         else:
-    #             self.set((self.uri, predicate, to_rdf_literal(value)))
-    #         if validate:
-    #             self.validate()
-    #     else:
-    #         super().__setattr__(name, value)
-
-    # def add_nif_classes(self):
-    #     for cls in self.nif_classes:
-    #         self.add((self.uri, rdflib.RDF.type, cls))
-    #     return self
-    #
-    # @classmethod
-    # def from_triples(cls, rdf_graph, ref_cxt):
-    #     raise NotImplementedError
-    #
-    # def validate(self):
-    #     raise NotImplementedError
 
 
 class NIFAnnotation(NIFString):
@@ -428,10 +384,12 @@ class NIFContext(NIFString):
 class NIFExtractedEntity(NIFAnnotation):
     def __init__(self, reference_context, begin_end_index, anchor_of,
                  entity_uri, **kwargs):
+        au = NIFAnnotationUnit(itsrdf__ta_ident_ref=rdflib.URIRef(entity_uri))
         super().__init__(
             reference_context=reference_context,
             begin_end_index=begin_end_index, anchor_of=anchor_of,
-            itsrdf__ta_ident_ref=rdflib.URIRef(entity_uri), **kwargs)
+            annotation_units=[au],
+            **kwargs)
 
 
 class NIFDocument:
@@ -537,6 +495,11 @@ class NIFDocument:
         for struct_uri in struct_uris:
             struct_triples = rdf_graph.triples((struct_uri, None, None))
             struct = NIFAnnotation.from_triples(struct_triples, ref_cxt=context)
+            au_uris = list(rdf_graph[struct_uri:nif_ns.annotationUnit:])
+            for au_uri in au_uris:
+                au_dict = {p_uri: o_uri for p_uri, o_uri in rdf_graph[au_uri::]}
+                au = NIFAnnotationUnit(uri=au_uri, **au_dict)
+                struct.add_annotation_unit(au)
             annotations.append(struct)
         out = cls(context=context, annotations=annotations)
 
