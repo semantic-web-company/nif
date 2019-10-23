@@ -393,7 +393,7 @@ class NIFExtractedEntity(NIFAnnotation):
 
 
 class NIFDocument:
-    def __init__(self, context, annotations):
+    def __init__(self, context, annotations=None):
         if not NIFContext.is_context(context):
             raise TypeError('The provided context {} is not a NIFContext'
                             '.'.format(context))
@@ -401,7 +401,7 @@ class NIFDocument:
         self.context = context
         self.uri_prefix = context.uri_prefix
         self.annotations = []
-        if annotations:
+        if annotations is not None:
             for ann in annotations:
                 self.add_annotation(ann)
         # self.rdf += self.context
@@ -504,6 +504,13 @@ class NIFDocument:
         out = cls(context=context, annotations=annotations)
 
         return out
+
+    def __copy__(self):
+        return NIFDocument.parse_rdf(self.serialize(format='n3'))
+
+    def __eq__(self, other):
+        return isinstance(other, NIFDocument) and \
+               self.serialize(format='n3') == other.serialize(format='n3')
 
 
 if __name__ == '__main__':

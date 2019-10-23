@@ -284,6 +284,18 @@ class TestDocument:
         d = NIFDocument(context=self.cxt, annotations=[])
         d.add_extracted_cpt(cpt)
 
+    def test_copy(self):
+        cpt = {
+            'uri': 'http://some.uri',
+            'matchings': [
+                {'text': 'larger', 'positions': [(5, 11)]},
+                {'text': 'this', 'positions': [(21, 25), (41, 45)]}
+            ]
+        }
+        d = NIFDocument(context=self.cxt, annotations=[])
+        d.add_extracted_cpt(cpt)
+        assert d == d.__copy__()
+
 
 class TestSuffix:
     def test_suffix(self):
