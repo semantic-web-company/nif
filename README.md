@@ -10,4 +10,4 @@ To run tests do:
 
 - Add examples of usage
 - Add install instructions (`pip install -e <github.com:semantic-web-company/nif.git>`)
-- Add support for provenance and `annotationUnits` (https://nif.readthedocs.io/en/latest/prov-and-conf.html) 
+- Make nif__anchor_of optional for NIFAnnotation 

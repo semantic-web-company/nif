@@ -226,7 +226,7 @@ class NIFAnnotation(NIFString):
     def __init__(self,
                  begin_end_index,
                  reference_context,
-                 anchor_of,
+                 anchor_of=None,
                  annotation_units: List[NIFAnnotationUnit] = None,
                  uri_scheme=nif_ns.OffsetBasedString,
                  **kwargs):
@@ -254,7 +254,8 @@ class NIFAnnotation(NIFString):
         self.reference_context = reference_context
         self.__setattr__('nif__reference_context', reference_context.uri,
                          validate=False)
-        self.__setattr__('nif__anchor_of', anchor_of, validate=False)
+        if anchor_of is not None:
+            self.__setattr__('nif__anchor_of', anchor_of, validate=False)
 
         self.annotation_units = dict()
         if annotation_units is not None:
