@@ -13,7 +13,7 @@ nif_ns = rdflib.namespace.ClosedNamespace(
         "CStringInst", "OffsetBasedString", "Word", "Annotation", "Title",
         "ContextCollection", "URIScheme", "ContextOccurrence",
         "ContextHashBasedString", "RFC5147String", "Paragraph", "Sentence",
-        "String", "CString", "Context", "AnnotationUnit",
+        "String", "CString", "Context", "AnnotationUnit", "TextSpanAnnotation"
 
         # ObjectProperties
         "superStringTrans", "lang", "previousWordTrans", "broaderContext",
