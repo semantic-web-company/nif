@@ -449,8 +449,8 @@ class NIFDocument:
         """
         cpt_uri = cpt_dict['uri']
         for matches in cpt_dict['matchings']:
-            surface_form = matches['text']
             for match in matches['positions']:
+                surface_form = self.context.nif__is_string[match[0]:match[1]]
                 ee = NIFExtractedEntity(
                     reference_context=self.context,
                     begin_end_index=(match[0], match[1]),
