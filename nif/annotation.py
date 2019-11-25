@@ -182,6 +182,7 @@ class NIFAnnotationUnit(RDFGetSetMixin):
                 p_uri = p
                 assert isinstance(p_uri, rdflib.URIRef), '{} is not a URIRef'.format(p)
             self.add((self.uri, p_uri, to_rdf_literal(o)))
+        self.add((self.uri, rdflib.RDF.type, nif_ns.AnnotationUnit))
 
     def validate(self):
         return True
