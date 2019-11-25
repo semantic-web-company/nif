@@ -85,10 +85,12 @@ def register_ns(key, ns):
     ns_dict[key] = ns
 
 
-def to_rdf_literal(value):
+def to_rdf_literal(value, datatype=None):
     if isinstance(value, (rdflib.URIRef, rdflib.Literal,
                           rdflib.BNode, rdflib.Variable)):
         return value
+    elif datatype is not None:
+        return rdflib.Literal(value, datatype=datatype)
     else:
         return rdflib.Literal(value)
 
@@ -109,7 +111,7 @@ class RDFGetSetMixin(rdflib.Graph):
         else:
             return super().__getattribute__(name)
 
-    def __setattr__(self, name, value, validate=True):
+    def __setattr__(self, name, value, validate=True, datatype=None):
         if name.startswith("_"):
             super().__setattr__(name, value)
         elif '__' in name:
@@ -117,22 +119,26 @@ class RDFGetSetMixin(rdflib.Graph):
             if isinstance(value, (list, tuple)):
                 self.remove((self.uri, predicate, None))
                 for val_item in value:
-                    self.add((self.uri, predicate, to_rdf_literal(val_item)))
+                    self.add((self.uri, predicate,
+                              to_rdf_literal(val_item, datatype=datatype)))
             else:
-                self.set((self.uri, predicate, to_rdf_literal(value)))
+                self.set((self.uri, predicate,
+                          to_rdf_literal(value, datatype=datatype)))
             if validate:
                 self.validate()
         else:
             super().__setattr__(name, value)
 
-    def addattr(self, name, value, validate=True):
+    def addattr(self, name, value, validate=True, datatype=None):
         assert '__' in name, name
         predicate = _parse_attr_name(name)
         if isinstance(value, (list, tuple)):
             for val_item in value:
-                self.add((self.uri, predicate, to_rdf_literal(val_item)))
+                self.add((self.uri, predicate,
+                          to_rdf_literal(val_item, datatype=datatype)))
         else:
-            self.add((self.uri, predicate, to_rdf_literal(value)))
+            self.add((self.uri, predicate,
+                      to_rdf_literal(value, datatype=datatype)))
         if validate:
             self.validate()
 
@@ -213,8 +219,10 @@ class NIFString(RDFGetSetMixin):
         self.reference_context = None  # this holds a separate graph
         self.uri = do_suffix_offset(uri_prefix, *begin_end_index)
         # URI obtained, set the predicate, object pairs
-        self.__setattr__('nif__begin_index', begin_end_index[0], validate=False)
-        self.__setattr__('nif__end_index', begin_end_index[1], validate=False)
+        self.__setattr__('nif__begin_index', begin_end_index[0], validate=False,
+                         datatype=rdflib.XSD.nonNegativeInteger)
+        self.__setattr__('nif__end_index', begin_end_index[1], validate=False,
+                         datatype=rdflib.XSD.nonNegativeInteger)
         self.add_nif_classes()
         for key, val in kwargs.items():
             self.__setattr__(key, val)
