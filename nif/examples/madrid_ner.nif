@@ -1,0 +1,34 @@
+@prefix dbo:   <http://dbpedia.org/ontology/> .
+@prefix eli:   <http://data.europa.eu/eli/ontology#> .
+@prefix dct:   <http://purl.org/dc/terms/> .
+@prefix dbr:   <http://dbpedia.org/resource/> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix lkg:   <http://lkg.lynx-project.eu/def/> .
+@prefix skos:  <http://www.w3.org/2004/02/skos/core#> .
+@prefix itsrdf: <http://www.w3.org/2005/11/its/rdf#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix nif:   <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#> .
+@prefix foaf:  <http://xmlns.com/foaf/0.1/> .
+
+<http://lkg.lynx-project.eu/res/62f33d5a#offset_7_13>
+        a                     nif:OffsetBasedString , lkg:LynxAnnotation ;
+        nif:anchorOf          "Madrid" ;
+        nif:annotationUnit    [ a                       nif:AnnotationUnit ;
+                                itsrdf:taAnnotatorsRef  "NER Service" ;
+                                itsrdf:taClassRef       dbo:Location ;
+                                itsrdf:taConfidence     0.5
+                              ] ;
+        nif:beginIndex        "7"^^xsd:nonNegativeInteger ;
+        nif:endIndex          "13"^^xsd:nonNegativeInteger ;
+        nif:referenceContext  <http://lkg.lynx-project.eu/res/62f33d5a> .
+
+<http://lkg.lynx-project.eu/res/62f33d5a>
+        a               lkg:LynxDocument , nif:Context ;
+        lkg:metadata    [ eli:id_local  "xyz" ;
+                          dct:language  "en"
+                        ] ;
+        nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
+        nif:endIndex    "41"^^xsd:nonNegativeInteger ;
+        nif:isString    "I like Madrid. Article 1. Madrid is good." .

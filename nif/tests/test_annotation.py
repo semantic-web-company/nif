@@ -13,9 +13,9 @@ class TestNIFString:
 
     def test_setattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri_prefix='http://example.com')
+                             uri='http://example.com')
         end_index = len(self.text)
-        assert str(nif_str.uri) == f'http://example.com#offset_0_{end_index}', \
+        assert str(nif_str.uri) == f'http://example.com', \
             nif_str.uri
         title_str = 'prefLabel'
         nif_str.rdfs__label = title_str
@@ -37,9 +37,9 @@ class TestNIFString:
 
     def test_addattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri_prefix='http://example.com')
+                             uri='http://example.com')
         end_index = len(self.text)
-        assert str(nif_str.uri) == f'http://example.com#offset_0_{end_index}', \
+        assert str(nif_str.uri) == f'http://example.com', \
             nif_str.uri
         title_str = 'prefLabel'
         nif_str.addattr('rdfs__label', title_str)
@@ -65,9 +65,9 @@ class TestNIFString:
 
     def test_delattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri_prefix='http://example.com')
+                             uri='http://example.com')
         end_index = len(self.text)
-        assert str(nif_str.uri) == f'http://example.com#offset_0_{end_index}', \
+        assert str(nif_str.uri) == f'http://example.com', \
             nif_str.uri
         title_str = 'prefLabel'
         nif_str.addattr('rdfs__label', title_str)
@@ -85,14 +85,14 @@ class TestAnnotation:
         self.text = 'Vodka and a Martini go to a bar and this is English and Alex is a name and sepsis is a disease.'
         self.cxt = NIFContext(
             is_string=self.text,
-            uri_prefix="http://some.doc/"+str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
 
     def test_context_created(self):
         text = 'some string. some other string.'
         cxt = NIFContext(
             is_string=text,
-            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
         subject_uri = cxt.value(predicate=nif_ns.isString,
                                 object=rdflib.Literal(text))
@@ -103,7 +103,7 @@ class TestAnnotation:
         text = 'some string. some other string.'
         cxt = NIFContext(
             is_string=text,
-            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
         ann = NIFAnnotation(
             begin_end_index=(0, len(text)), is_string=text,
@@ -156,7 +156,7 @@ class TestContext:
     def test_context_created(self):
         cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
-            uri_prefix="http://some.doc/"+str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
 
     def test_from_triples(self):
@@ -173,19 +173,19 @@ class TestContext:
 @prefix nif:   <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#> .
 
 <http://dkt.dfki.de/documents#offset_0_26>
-        a               nif:RFC5147String , nif:String , nif:Context ;
+        a               nif:OffsetBasedString , nif:Context ;
         nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
         nif:endIndex    "26"^^xsd:nonNegativeInteger ;
         nif:isString    "Welcome to Berlin in 2016." .""", format='turtle')
         na = NIFContext.from_triples(triples)
-        assert len(na) == 7, (len(na), list(na))
+        assert len(na) == 5, (len(na), list(na))
 
 
 class TestExtractedEntity:
     def setUp(self):
         self.cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
-            uri_prefix="http://some.doc/"+str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
 
     def test_phrase_created(self):
@@ -217,10 +217,10 @@ class TestDocument:
         self.uri_prefix = "http://some.doc/" + str(uuid.uuid4())
         self.cxt = NIFContext(
             is_string=self.txt,
-            uri_prefix=self.uri_prefix)
+            uri=self.uri_prefix)
         self.cxt2 = NIFContext(
             is_string=self.txt[:-1],
-            uri_prefix="http://some.doc/" + str(uuid.uuid4()))
+            uri="http://some.doc/" + str(uuid.uuid4()))
         ex_uri = 'http://example.com/index#some'
         self.ee = NIFExtractedEntity(
             reference_context=self.cxt,
@@ -261,7 +261,7 @@ class TestDocument:
         d = NIFDocument.from_text(self.txt, self.uri_prefix)
         assert d.context.uri.startswith(self.uri_prefix), (d.uri_prefix,
                                                            self.uri_prefix)
-        assert d.uri_prefix == self.uri_prefix
+        assert d.uri_prefix == self.uri_prefix, (d.uri_prefix, self.uri_prefix)
         assert d.context.uri.startswith(self.uri_prefix)
 
     def test_add_struct(self):
