@@ -183,12 +183,13 @@ class TestContext:
 
 class TestExtractedEntity:
     def setUp(self):
+        pass
+
+    def test_phrase_created(self):
         self.cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
             uri="http://some.doc/" + str(uuid.uuid4())
         )
-
-    def test_phrase_created(self):
         ex_uri = 'http://example.com/index#some'
         ee = NIFExtractedEntity(
             reference_context=self.cxt,
@@ -200,6 +201,10 @@ class TestExtractedEntity:
         assert str(ta_ident_ref) == ex_uri, ta_ident_ref
 
     def test_phrase_mutations_check(self):
+        self.cxt = NIFContext(
+            is_string='some larger context. this is a phrase in this context.',
+            uri="http://some.doc/" + str(uuid.uuid4())
+        )
         ex_uri = 'http://example.com/index#some'
         ee = NIFExtractedEntity(
             reference_context=self.cxt,
@@ -209,6 +214,21 @@ class TestExtractedEntity:
         )
         with nose.tools.assert_raises(ValueError):
             ee.nif__begin_index = 1
+
+    def test_annotators_ref(self):
+        cxt = NIFContext(is_string='I like Madrid. Article 1. Europe is good.',
+                         uri='https://lynx.poolparty.biz')
+        nif_doc = NIFDocument(context=cxt)
+        cpt = {'prefLabel': [], 'frequencyInDocument': 1, 'uri': 'http://vocabulary.semantic-web.at/CBeurovoc/C909', 'score': 100.0, 'transitiveBroaderConcepts': ['http://vocabulary.semantic-web.at/CBeurovoc/MT7206'], 'transitiveBroaderTopConcepts': [], 'relatedConcepts': [], 'matchings': [{'text': 'europe', 'frequency': 1, 'positions': [(26, 32)]}]}
+        nif_doc.add_extracted_cpt(
+            cpt,
+            au_kwargs={'itsrdf__ta_annotators_ref': ns_dict['lkg']['EL']},
+            rdf__type=ns_dict['lkg']['LynxAnnotation'])
+        au = list(nif_doc.annotations[0].annotation_units.values())[0]
+        # check itsrdf:taAnnotatorsRef is present
+        annotators = list(au[:ns_dict['itsrdf']['taAnnotatorsRef']:])
+        assert annotators, list(au[:])
+        assert len(au) >= 3
 
 
 class TestDocument:

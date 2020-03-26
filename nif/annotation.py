@@ -370,7 +370,7 @@ class NIFContext(NIFString):
 class NIFExtractedEntity(NIFAnnotation):
     def __init__(self, reference_context, begin_end_index, anchor_of,
                  entity_uri, au_kwargs=None, **kwargs):
-        if au_kwargs:
+        if au_kwargs is not None:
             au = NIFAnnotationUnit(
                 itsrdf__ta_ident_ref=rdflib.URIRef(entity_uri), **au_kwargs)
         else:
