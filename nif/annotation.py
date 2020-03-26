@@ -369,8 +369,13 @@ class NIFContext(NIFString):
 
 class NIFExtractedEntity(NIFAnnotation):
     def __init__(self, reference_context, begin_end_index, anchor_of,
-                 entity_uri, **kwargs):
-        au = NIFAnnotationUnit(itsrdf__ta_ident_ref=rdflib.URIRef(entity_uri))
+                 entity_uri, au_kwargs=None, **kwargs):
+        if au_kwargs:
+            au = NIFAnnotationUnit(
+                itsrdf__ta_ident_ref=rdflib.URIRef(entity_uri), **au_kwargs)
+        else:
+            au = NIFAnnotationUnit(
+                itsrdf__ta_ident_ref=rdflib.URIRef(entity_uri))
         super().__init__(
             reference_context=reference_context,
             begin_end_index=begin_end_index, anchor_of=anchor_of,
@@ -422,7 +427,7 @@ class NIFDocument:
     def add_extracted_entity(self, ee):
         self.add_annotation(ee)
 
-    def add_extracted_cpt(self, cpt_dict, **kwargs):
+    def add_extracted_cpt(self, cpt_dict, au_kwargs=None, **kwargs):
         """
         :param cpt_dict: expected to have 'uri',
             'matchings'-> [{'text': value,
@@ -439,6 +444,7 @@ class NIFDocument:
                     begin_end_index=(match[0], match[1]),
                     anchor_of=surface_form,
                     entity_uri=cpt_uri,
+                    au_kwargs=au_kwargs,
                     **kwargs
                 )
                 self.add_extracted_entity(ee)
