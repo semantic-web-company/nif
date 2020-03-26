@@ -393,7 +393,7 @@ class NIFDocument:
         self.annotations = []
         if annotations is not None:
             for ann in annotations:
-                self.add_annotation(ann)
+                self.add_annotations([ann])
         self.validate()
 
     def validate(self):
@@ -413,19 +413,21 @@ class NIFDocument:
         cxt = NIFContext(is_string=text, uri=uri)
         return cls(context=cxt, annotations=[])
 
-    def add_annotation(self, ann: NIFAnnotation):
-        self.annotations.append(ann)
+    def add_annotations(self, anns: NIFAnnotation):
+        for ann in anns:
+            self.annotations.append(ann)
         try:
             self.validate()
         except (ValueError, TypeError) as e:
-            self.annotations.pop()
+            for _ in range(len(anns)):
+                self.annotations.pop()
             raise e
         # else:
             # self.rdf += ann
         return self
 
-    def add_extracted_entity(self, ee):
-        self.add_annotation(ee)
+    def add_extracted_entities(self, ees):
+        self.add_annotations(ees)
 
     def add_extracted_cpt(self, cpt_dict, au_kwargs=None, **kwargs):
         """
@@ -436,6 +438,7 @@ class NIFDocument:
         :return: self
         """
         cpt_uri = cpt_dict['uri']
+        ees = []
         for matches in cpt_dict['matchings']:
             for match in matches['positions']:
                 surface_form = self.context.nif__is_string[match[0]:match[1]]
@@ -447,7 +450,8 @@ class NIFDocument:
                     au_kwargs=au_kwargs,
                     **kwargs
                 )
-                self.add_extracted_entity(ee)
+                ees.append(ee)
+        self.add_extracted_entities(ees)
         return self
 
     @property

@@ -286,12 +286,12 @@ class TestDocument:
 
     def test_add_struct(self):
         d = NIFDocument(context=self.cxt, annotations=[])
-        d.add_extracted_entity(self.ee)
+        d.add_extracted_entities([self.ee])
 
     def test_not_add_invalid_struct(self):
         d = NIFDocument(context=self.cxt, annotations=[])
         with nose.tools.assert_raises(ValueError):
-            d.add_extracted_entity(self.ee2)
+            d.add_extracted_entities([self.ee2])
 
     def test_add_cpt(self):
         cpt = {
