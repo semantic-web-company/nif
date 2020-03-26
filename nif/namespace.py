@@ -33,10 +33,12 @@ nif_ns = rdflib.namespace.ClosedNamespace(
 )
 itsrdf_ns = rdflib.Namespace('http://www.w3.org/2005/11/its/rdf#')
 eli_ns = rdflib.Namespace('http://data.europa.eu/eli/ontology#')
+lynx_ns = rdflib.Namespace('http://lkg.lynx-project.eu/def/')
 ns_dict = {'nif': nif_ns,
            'itsrdf': itsrdf_ns,
            'rdf': rdflib.RDF,
            'rdfs': rdflib.RDFS,
            'owl': rdflib.OWL,
+           'lkg': lynx_ns,
            # 'dct': rdflib.namespace.DCTERMS,
            'eli': eli_ns}

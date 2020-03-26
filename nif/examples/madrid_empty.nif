@@ -19,4 +19,4 @@
                         ] ;
         nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
         nif:endIndex    "41"^^xsd:nonNegativeInteger ;
-        nif:isString    "I like Madrid. Article 1. Madrid is good." .
+        nif:isString    "I like Madrid. Article 1. Europe is good." .

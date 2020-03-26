@@ -158,8 +158,6 @@ class NIFString(RDFGetSetMixin):
 
     def __init__(self,
                  begin_end_index,
-                 # uri,
-                 # uri_scheme=nif_ns.OffsetBasedString,
                  **kwargs):
         """
         The base abstract class.
@@ -169,10 +167,6 @@ class NIFString(RDFGetSetMixin):
         :param **kwargs: any additional (predicate, object) pairs
         """
         super().__init__()
-        # assert uri_scheme in [nif_ns.ContextHashBasedString,
-        #                       nif_ns.RFC5147String, nif_ns.CStringInst,
-        #                       nif_ns.OffsetBasedString]
-        # self.nif_classes.append(uri_scheme)
         try:
             begin_end_index = tuple(map(int, begin_end_index))
         except ValueError:
@@ -180,16 +174,13 @@ class NIFString(RDFGetSetMixin):
                 'begin_end_index should be convertible to integers, '
                 '{} provided'.format(begin_end_index))
         self.reference_context = None  # this holds a separate graph
-        # self.uri = rdflib.URIRef(uri)
-        # self.uri = do_suffix_offset(uri, *begin_end_index)
-        # URI obtained, set the predicate, object pairs
         self.__setattr__('nif__begin_index', begin_end_index[0], validate=False,
                          datatype=rdflib.XSD.nonNegativeInteger)
         self.__setattr__('nif__end_index', begin_end_index[1], validate=False,
                          datatype=rdflib.XSD.nonNegativeInteger)
-        self.add_nif_classes()
         for key, val in kwargs.items():
             self.__setattr__(key, val)
+        self.add_nif_classes()
 
 
 class NIFOffsetBasedString(NIFString):
@@ -216,23 +207,6 @@ class NIFOffsetBasedString(NIFString):
         self.nif_classes.append(uri_scheme)
         self.uri = do_suffix_offset(uri_prefix, *begin_end_index)
         super().__init__(begin_end_index, **kwargs)
-        # self.uri = do_suffix_offset(uri, *begin_end_index)
-        # try:
-        #     begin_end_index = tuple(map(int, begin_end_index))
-        # except ValueError:
-        #     raise ValueError(
-        #         'begin_end_index should be convertible to integers, '
-        #         '{} provided'.format(begin_end_index))
-        # self.reference_context = None  # this holds a separate graph
-        # self.uri = do_suffix_offset(uri, *begin_end_index)
-        # # URI obtained, set the predicate, object pairs
-        # self.__setattr__('nif__begin_index', begin_end_index[0], validate=False,
-        #                  datatype=rdflib.XSD.nonNegativeInteger)
-        # self.__setattr__('nif__end_index', begin_end_index[1], validate=False,
-        #                  datatype=rdflib.XSD.nonNegativeInteger)
-        # self.add_nif_classes()
-        # for key, val in kwargs.items():
-        #     self.__setattr__(key, val)
 
 
 class NIFAnnotation(NIFOffsetBasedString):
@@ -448,7 +422,7 @@ class NIFDocument:
     def add_extracted_entity(self, ee):
         self.add_annotation(ee)
 
-    def add_extracted_cpt(self, cpt_dict):
+    def add_extracted_cpt(self, cpt_dict, **kwargs):
         """
         :param cpt_dict: expected to have 'uri',
             'matchings'-> [{'text': value,
@@ -464,7 +438,8 @@ class NIFDocument:
                     reference_context=self.context,
                     begin_end_index=(match[0], match[1]),
                     anchor_of=surface_form,
-                    entity_uri=cpt_uri
+                    entity_uri=cpt_uri,
+                    **kwargs
                 )
                 self.add_extracted_entity(ee)
         return self
