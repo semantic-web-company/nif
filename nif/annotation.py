@@ -429,7 +429,7 @@ class NIFDocument:
     def add_extracted_entities(self, ees):
         self.add_annotations(ees)
 
-    def add_extracted_cpt(self, cpt_dict, au_kwargs=None, **kwargs):
+    def add_extracted_cpts(self, cpt_dicts, au_kwargs=None, **kwargs):
         """
         :param cpt_dict: expected to have 'uri',
             'matchings'-> [{'text': value,
@@ -437,20 +437,21 @@ class NIFDocument:
                            ...]
         :return: self
         """
-        cpt_uri = cpt_dict['uri']
         ees = []
-        for matches in cpt_dict['matchings']:
-            for match in matches['positions']:
-                surface_form = self.context.nif__is_string[match[0]:match[1]]
-                ee = NIFExtractedEntity(
-                    reference_context=self.context,
-                    begin_end_index=(match[0], match[1]),
-                    anchor_of=surface_form,
-                    entity_uri=cpt_uri,
-                    au_kwargs=au_kwargs,
-                    **kwargs
-                )
-                ees.append(ee)
+        for cpt_dict in cpt_dicts:
+            cpt_uri = cpt_dict['uri']
+            for matches in cpt_dict['matchings']:
+                for match in matches['positions']:
+                    surface_form = self.context.nif__is_string[match[0]:match[1]]
+                    ee = NIFExtractedEntity(
+                        reference_context=self.context,
+                        begin_end_index=(match[0], match[1]),
+                        anchor_of=surface_form,
+                        entity_uri=cpt_uri,
+                        au_kwargs=au_kwargs,
+                        **kwargs
+                    )
+                    ees.append(ee)
         self.add_extracted_entities(ees)
         return self
 

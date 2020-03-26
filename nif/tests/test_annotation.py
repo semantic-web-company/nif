@@ -220,8 +220,8 @@ class TestExtractedEntity:
                          uri='https://lynx.poolparty.biz')
         nif_doc = NIFDocument(context=cxt)
         cpt = {'prefLabel': [], 'frequencyInDocument': 1, 'uri': 'http://vocabulary.semantic-web.at/CBeurovoc/C909', 'score': 100.0, 'transitiveBroaderConcepts': ['http://vocabulary.semantic-web.at/CBeurovoc/MT7206'], 'transitiveBroaderTopConcepts': [], 'relatedConcepts': [], 'matchings': [{'text': 'europe', 'frequency': 1, 'positions': [(26, 32)]}]}
-        nif_doc.add_extracted_cpt(
-            cpt,
+        nif_doc.add_extracted_cpts(
+            [cpt],
             au_kwargs={'itsrdf__ta_annotators_ref': ns_dict['lkg']['EL']},
             rdf__type=ns_dict['lkg']['LynxAnnotation'])
         au = list(nif_doc.annotations[0].annotation_units.values())[0]
@@ -302,7 +302,7 @@ class TestDocument:
             ]
         }
         d = NIFDocument(context=self.cxt, annotations=[])
-        d.add_extracted_cpt(cpt)
+        d.add_extracted_cpts([cpt])
 
     def test_copy(self):
         cpt = {
@@ -313,7 +313,7 @@ class TestDocument:
             ]
         }
         d = NIFDocument(context=self.cxt, annotations=[])
-        d.add_extracted_cpt(cpt)
+        d.add_extracted_cpts([cpt])
         assert d == d.__copy__()
 
 
