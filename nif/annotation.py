@@ -342,27 +342,31 @@ class NIFContext(NIFString):
         return isinstance(cxt, NIFContext)
 
     @classmethod
-    def from_triples(cls, rdf_graph, ref_cxt=None,
+    def from_triples(cls, rdf_graph, context_uri,
+                     ref_cxt=None,
                      uri_scheme=nif_ns.OffsetBasedString):
         kwargs = dict()
         other_triples = rdflib.Graph()
         for s, p, o in rdf_graph:
-            if p == nif_ns.isString:
+            if s != context_uri:
+                other_triples.add((s, p, o))
+            elif p == nif_ns.isString:
                 if 'is_string' in kwargs:
                     raise ValueError('{} found twice. {}, {}'.format(p, kwargs, o.toPython()))
                 kwargs['is_string'] = o.toPython()
                 uri = s.toPython()
-            elif p == nif_ns.beginIndex:
-                begin_index = int(o.toPython())
-            elif p == nif_ns.endIndex:
-                end_index = int(o.toPython())
+                assert str(uri) == str(context_uri)
+            # elif p == nif_ns.beginIndex:
+            #     begin_index = int(o.toPython())
+            # elif p == nif_ns.endIndex:
+            #     end_index = int(o.toPython())
             else:
                 other_triples.add((s, p, o))
 
-        out = cls(uri=uri, **kwargs)
-        if (int(out.nif__begin_index) != begin_index or
-                int(out.nif__end_index) != end_index):
-            raise ValueError('Check the provided begin and end indices!')
+        out = cls(uri=context_uri, **kwargs)
+        # if (int(out.nif__begin_index) != begin_index or
+        #         int(out.nif__end_index) != end_index):
+        #     raise ValueError('Check the provided begin and end indices!')
         out += other_triples
         return out
 
@@ -490,7 +494,8 @@ class NIFDocument:
         for t in context_triples:
             if isinstance(t[2], rdflib.BNode):
                 context_triples += list(rdf_graph.triples((t[2], None, None)))
-        context = NIFContext.from_triples(context_triples)
+        context = NIFContext.from_triples(context_triples,
+                                          context_uri=context_uri)
 
         annotations = []
         struct_uris = list(rdf_graph[:nif_ns.referenceContext:context.uri])

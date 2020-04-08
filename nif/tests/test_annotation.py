@@ -177,7 +177,7 @@ class TestContext:
         nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
         nif:endIndex    "26"^^xsd:nonNegativeInteger ;
         nif:isString    "Welcome to Berlin in 2016." .""", format='turtle')
-        na = NIFContext.from_triples(triples)
+        na = NIFContext.from_triples(triples, context_uri=rdflib.URIRef('http://dkt.dfki.de/documents#offset_0_26'))
         assert len(na) == 5, (len(na), list(na))
 
 

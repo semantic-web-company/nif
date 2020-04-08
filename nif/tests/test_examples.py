@@ -22,8 +22,9 @@ class TestMadridNif:
             for filename in os.listdir(self.examples_path)
             if re.match(r'madrid.*\.nif', filename)
         ]
+        self.aardwamte_path = self.examples_path / 'aardwamte.nif'
 
-    def test_read(self):
+    def test_read_madrid(self):
         for file_path in self.madrid_paths:
             with file_path.open():
                 try:
@@ -35,3 +36,16 @@ class TestMadridNif:
                 assert len(g) <= len(r.rdf), (len(g), len(r.rdf))
             print(file_path)
             print(r.serialize(format='n3').decode())
+
+    def test_read_aardwamte(self):
+        with self.aardwamte_path.open():
+            try:
+                r = NIFDocument.parse_rdf(self.aardwamte_path.read_text())
+            except Exception as e:
+                logger.warning(f'Problem parsing {self.aardwamte_path}.')
+                raise e
+            g = rdflib.Graph().parse(data=self.aardwamte_path.read_text(),
+                                     format='n3')
+            assert len(g) <= len(r.rdf), (len(g), len(r.rdf))
+        print(self.aardwamte_path)
+        # print(r.serialize(format='n3').decode())
