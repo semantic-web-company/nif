@@ -1,3 +1,4 @@
 .idea
 *__pycache__*
 /nif/parse_ols_sample.py
+*.bkp

@@ -33,7 +33,7 @@ class TestMadridNif:
                     logger.warning(f'Problem parsing {file_path}.')
                     raise e
                 g = rdflib.Graph().parse(data=file_path.read_text(), format='n3')
-                assert len(g) <= len(r.rdf), (len(g), len(r.rdf))
+            assert len(g) <= len(r.rdf), (len(g), len(r.rdf))
             # print(file_path)
             # print(r.serialize(format='n3').decode())
 
@@ -46,11 +46,11 @@ class TestMadridNif:
                 raise e
             g = rdflib.Graph().parse(data=self.aardwamte_path.read_text(),
                                      format='n3')
-            print(r.serialize(format='turtle').decode())
-            assert len(g) <= len(r.rdf), (len(g), len(r.rdf))
-            lynx_doc_parts = r.rdf[:rdflib.RDF.type:rdflib.URIRef("http://lkg.lynx-project.eu/def/LynxDocumentPart")]
-            for doc_part in lynx_doc_parts:
-                assert (doc_part, rdflib.RDF.type, nif_ns.Annotation) not in g, (doc_part, rdflib.RDF.type, nif_ns.Annotation)
-                assert (doc_part, rdflib.RDF.type, nif_ns.Annotation) not in r.rdf, (doc_part, rdflib.RDF.type, nif_ns.Annotation)
+        print(r.serialize(format='turtle').decode())
+        assert len(g) <= len(r.rdf), (len(g), len(r.rdf))
+        lynx_doc_parts = r.rdf[:rdflib.RDF.type:rdflib.URIRef("http://lkg.lynx-project.eu/def/LynxDocumentPart")]
+        for doc_part in lynx_doc_parts:
+            assert (doc_part, rdflib.RDF.type, nif_ns.Annotation) not in g, (doc_part, rdflib.RDF.type, nif_ns.Annotation)
+            assert (doc_part, rdflib.RDF.type, nif_ns.Annotation) not in r.rdf, (doc_part, rdflib.RDF.type, nif_ns.Annotation)
         # print(self.aardwamte_path)
         # print(r.serialize(format='n3').decode())
