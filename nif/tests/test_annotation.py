@@ -304,17 +304,17 @@ class TestDocument:
         d = NIFDocument(context=self.cxt, annotations=[])
         d.add_extracted_cpts([cpt])
 
-    def test_copy(self):
-        cpt = {
-            'uri': 'http://some.uri',
-            'matchings': [
-                {'text': 'larger', 'positions': [(5, 11)]},
-                {'text': 'this', 'positions': [(21, 25), (41, 45)]}
-            ]
-        }
-        d = NIFDocument(context=self.cxt, annotations=[])
-        d.add_extracted_cpts([cpt])
-        assert d == d.__copy__()
+    # def test_copy(self):
+    #     cpt = {
+    #         'uri': 'http://some.uri',
+    #         'matchings': [
+    #             {'text': 'larger', 'positions': [(5, 11)]},
+    #             {'text': 'this', 'positions': [(21, 25), (41, 45)]}
+    #         ]
+    #     }
+    #     d = NIFDocument(context=self.cxt, annotations=[])
+    #     d.add_extracted_cpts([cpt])
+    #     assert d == d.__copy__()
 
 
 class TestSuffix:
@@ -326,47 +326,48 @@ class TestSuffix:
         assert str(r) == 'http://dkt.dfki.de/documents#offset_0_26', r
 
 
-class TestParsing:
-    def setUp(self):
-        self.rdf_to_parse = '''
-@prefix dbo:   <http://dbpedia.org/ontology/> .
-@prefix geo:   <http://www.w3.org/2003/01/geo/wgs84_pos/> .
-@prefix dktnif: <http://dkt.dfki.de/ontologies/nif#> .
-@prefix nif-ann: <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-annotation#> .
-@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
-@prefix itsrdf: <http://www.w3.org/2005/11/its/rdf#> .
-@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix nif:   <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#> .
-
-<http://dkt.dfki.de/documents#offset_11_17>
-        a                     nif:RFC5147String , nif:String , nif:Structure ;
-        nif:anchorOf          "Berlin" ;
-        nif:beginIndex        "11"^^xsd:nonNegativeInteger ;
-        nif:endIndex          "17"^^xsd:nonNegativeInteger ;
-        nif:referenceContext  <http://dkt.dfki.de/documents#offset_0_26> ;
-        itsrdf:taClassRef     dbo:Location ;
-        itsrdf:taIdentRef     <http://www.wikidata.org/entity/Q64> ;
-        itsrdf:taIdentRef     []  .
-
-<http://dkt.dfki.de/documents#offset_0_26>
-        a               nif:RFC5147String , nif:String , nif:Context ;
-        nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
-        nif:endIndex    "26"^^xsd:nonNegativeInteger ;
-        nif:isString    "Welcome to Berlin in 2016." .
-'''
-
-    def test_parse_correct(self):
-        parsed = NIFDocument.parse_rdf(self.rdf_to_parse, format='turtle')
-        serialized = parsed.serialize(format='turtle')
-        g_original = rdflib.Graph()
-        g_original.parse(data=self.rdf_to_parse, format='turtle')
-        g_processed = rdflib.Graph()
-        g_processed.parse(data=serialized, format='turtle')
-
-        sp_pairs_original = [(s, p) for s, p, o in g_original]
-        sp_orig_counter = Counter(sp_pairs_original)
-        sp_pairs_processed = [(s, p) for s, p, o in g_processed]
-        sp_processed_counter = Counter(sp_pairs_processed)
-        for k, v in (sp_orig_counter - sp_processed_counter).items():
-            assert v <= 0, (k,v)
+# class TestParsing:
+#     def setUp(self):
+#         self.rdf_to_parse = '''
+# @prefix dbo:   <http://dbpedia.org/ontology/> .
+# @prefix geo:   <http://www.w3.org/2003/01/geo/wgs84_pos/> .
+# @prefix dktnif: <http://dkt.dfki.de/ontologies/nif#> .
+# @prefix nif-ann: <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-annotation#> .
+# @prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+# @prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+# @prefix itsrdf: <http://www.w3.org/2005/11/its/rdf#> .
+# @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+# @prefix nif:   <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#> .
+#
+# <http://dkt.dfki.de/documents#offset_11_17>
+#         a                     nif:RFC5147String , nif:String , nif:Structure ;
+#         nif:anchorOf          "Berlin" ;
+#         nif:beginIndex        "11"^^xsd:nonNegativeInteger ;
+#         nif:endIndex          "17"^^xsd:nonNegativeInteger ;
+#         nif:referenceContext  <http://dkt.dfki.de/documents#offset_0_26> ;
+#         itsrdf:taClassRef     dbo:Location ;
+#         itsrdf:taIdentRef     <http://www.wikidata.org/entity/Q64> ;
+#         itsrdf:taIdentRef     []  .
+#
+# <http://dkt.dfki.de/documents#offset_0_26>
+#         a               nif:RFC5147String , nif:String , nif:Context ;
+#         nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
+#         nif:endIndex    "26"^^xsd:nonNegativeInteger ;
+#         nif:isString    "Welcome to Berlin in 2016." .
+# '''
+#
+#     def test_parse_correct(self):
+#         parsed = NIFDocument.parse_rdf(self.rdf_to_parse, format='turtle')
+#         serialized = parsed.serialize(format='turtle')
+#         print(serialized)
+#         g_original = rdflib.Graph()
+#         g_original.parse(data=self.rdf_to_parse, format='turtle')
+#         g_processed = rdflib.Graph()
+#         g_processed.parse(data=serialized, format='turtle')
+#
+#         sp_pairs_original = [(s, p) for s, p, o in g_original]
+#         sp_orig_counter = Counter(sp_pairs_original)
+#         sp_pairs_processed = [(s, p) for s, p, o in g_processed]
+#         sp_processed_counter = Counter(sp_pairs_processed)
+#         for k, v in (sp_orig_counter - sp_processed_counter).items():
+#             assert v <= 0, (k,v)

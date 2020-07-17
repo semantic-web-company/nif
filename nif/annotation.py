@@ -498,7 +498,9 @@ class NIFDocument:
                                           context_uri=context_uri)
 
         annotations = []
-        struct_uris = list(rdf_graph[:nif_ns.referenceContext:context.uri])
+        # struct_uris = list(rdf_graph[:nif_ns.referenceContext:context.uri])
+        struct_uris = (set(rdf_graph[:nif_ns.referenceContext:context.uri]) &
+                       set(rdf_graph[:rdflib.RDF.type:nif_ns.Annotation]))
         for struct_uri in struct_uris:
             struct_triples = rdf_graph.triples((struct_uri, None, None))
             struct = NIFAnnotation.from_triples(struct_triples, ref_cxt=context)
@@ -509,6 +511,10 @@ class NIFDocument:
                 struct.add_annotation_unit(au)
             annotations.append(struct)
         out = cls(context=context, annotations=annotations)
+
+        for t in rdf_graph:
+            if t not in out.rdf:
+                out.context.add(t)
 
         return out
 
