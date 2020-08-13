@@ -8,15 +8,15 @@ from nose.tools import assert_raises
 
 from nif.annotation import *
 
-from dotenv import load_dotenv
-load_dotenv()
+# from dotenv import load_dotenv
+# load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
 class TestMadridNif:
     def setUp(self):
-        self.examples_path = Path(os.getenv('EXAMPLES_PATH'))
+        self.examples_path = Path(os.getenv('EXAMPLES_PATH', default='../examples'))
         self.madrid_paths = [
             self.examples_path / filename
             for filename in os.listdir(self.examples_path)

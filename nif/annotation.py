@@ -128,7 +128,7 @@ class RDFGetSetMixin(rdflib.Graph):
 
 
 class NIFAnnotationUnit(RDFGetSetMixin):
-    nif_classes = [nif_ns.AnnotationUnit]
+    nif_classes = (nif_ns.AnnotationUnit,)
 
     def __init__(self, uri: str = None, **kwargs):
         """
@@ -154,7 +154,7 @@ class NIFAnnotationUnit(RDFGetSetMixin):
 
 
 class NIFString(RDFGetSetMixin):
-    nif_classes = []
+    nif_classes = tuple()
 
     def __init__(self,
                  begin_end_index,
@@ -184,7 +184,7 @@ class NIFString(RDFGetSetMixin):
 
 
 class NIFOffsetBasedString(NIFString):
-    nif_classes = []
+    nif_classes = tuple()
 
     def __init__(self,
                  begin_end_index,
@@ -204,13 +204,15 @@ class NIFOffsetBasedString(NIFString):
         assert uri_scheme in [nif_ns.ContextHashBasedString,
                               nif_ns.RFC5147String, nif_ns.CStringInst,
                               nif_ns.OffsetBasedString]
+        self.nif_classes = list(self.nif_classes)
         self.nif_classes.append(uri_scheme)
+        self.nif_classes = tuple(self.nif_classes)
         self.uri = do_suffix_offset(uri_prefix, *begin_end_index)
         super().__init__(begin_end_index, **kwargs)
 
 
 class NIFAnnotation(NIFOffsetBasedString):
-    nif_classes = [nif_ns.Annotation]
+    nif_classes = (nif_ns.Annotation,)
 
     def __init__(self,
                  begin_end_index,
@@ -320,9 +322,9 @@ class NIFAnnotation(NIFOffsetBasedString):
 
 
 class NIFContext(NIFString):
-    nif_classes = [nif_ns.Context]
+    nif_classes = (nif_ns.Context, )
 
-    def __init__(self, is_string, uri):
+    def __init__(self, uri, is_string):
         """
         :param is_string: see http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core/nif-core.html#d4e669
         :param uri: the URI.
@@ -363,6 +365,7 @@ class NIFContext(NIFString):
             else:
                 other_triples.add((s, p, o))
 
+        print(cls, context_uri)
         out = cls(uri=context_uri, **kwargs)
         # if (int(out.nif__begin_index) != begin_index or
         #         int(out.nif__end_index) != end_index):
@@ -399,6 +402,7 @@ class NIFDocument:
             for ann in annotations:
                 self.add_annotations([ann])
         self.validate()
+        # self._rdf = None
 
     def validate(self):
         for ann in self.annotations:
@@ -442,7 +446,7 @@ class NIFDocument:
         :return: self
         """
         ees = []
-        for cpt_dict in cpt_dicts:
+        for i, cpt_dict in enumerate(cpt_dicts):
             cpt_uri = cpt_dict['uri']
             for matches in cpt_dict['matchings']:
                 for match in matches['positions']:
@@ -461,11 +465,13 @@ class NIFDocument:
 
     @property
     def rdf(self):
+        # if self._rdf is None:
         _rdf = self.context
         for ann in self.annotations:
             _rdf += ann
             for au in ann.annotation_units.values():
                 _rdf += au
+        # self._rdf = _rdf
         return _rdf
 
     def serialize(self, format="xml",
@@ -501,7 +507,7 @@ class NIFDocument:
         # struct_uris = list(rdf_graph[:nif_ns.referenceContext:context.uri])
         struct_uris = (set(rdf_graph[:nif_ns.referenceContext:context.uri]) &
                        set(rdf_graph[:rdflib.RDF.type:nif_ns.Annotation]))
-        for struct_uri in struct_uris:
+        for i, struct_uri in enumerate(struct_uris):
             struct_triples = rdf_graph.triples((struct_uri, None, None))
             struct = NIFAnnotation.from_triples(struct_triples, ref_cxt=context)
             au_uris = list(rdf_graph[struct_uri:nif_ns.annotationUnit:])
@@ -512,9 +518,9 @@ class NIFDocument:
             annotations.append(struct)
         out = cls(context=context, annotations=annotations)
 
-        for t in rdf_graph:
-            if t not in out.rdf:
-                out.context.add(t)
+        for t in rdf_graph - out.rdf:
+            # if t not in out.rdf:
+            out.context.add(t)
 
         return out
 
