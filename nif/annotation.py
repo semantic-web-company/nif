@@ -365,7 +365,7 @@ class NIFContext(NIFString):
             else:
                 other_triples.add((s, p, o))
 
-        print(cls, context_uri)
+        # print(cls, context_uri)
         out = cls(uri=context_uri, **kwargs)
         # if (int(out.nif__begin_index) != begin_index or
         #         int(out.nif__end_index) != end_index):
@@ -476,11 +476,12 @@ class NIFDocument:
 
     def serialize(self, format="xml",
                   # uri_format=nif_ns.OffsetBasedString
+                  **kwargs
                   ):
         # if uri_format not in [nif_ns.OffsetBasedString, nif_ns.RFC5147String]:
         #     raise ValueError("Only RFC5147 and OffsetBased strings are "
         #                      "currently supported URI schemes")
-        rdf_text = self.rdf.serialize(format=format)
+        rdf_text = self.rdf.serialize(format=format, **kwargs)
 
         # if uri_format == nif_ns.RFC5147String:
         #     RFC5147_str = br"#char\=\(\1,\2\)"
@@ -577,6 +578,6 @@ if __name__ == '__main__':
     d = NIFDocument.parse_rdf(nifDocument, format='turtle')
     ann = NIFAnnotation(begin_end_index=(0, len(d.context.nif__is_string)))
     ann.nif__summary = "<your summary here>"
-    d.add_annotation(ann)
+    d.add_annotations([ann])
 
 
