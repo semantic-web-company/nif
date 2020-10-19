@@ -13,7 +13,7 @@
 @prefix foaf:  <http://xmlns.com/foaf/0.1/> .
 
 <http://lkg.lynx-project.eu/res/00dc155e>
-        a               lkg:LynxDocument , nif:Context ;
+        a               lkg:LynxDocument ;
         eli:has_part    <http://lkg.lynx-project.eu/res/00dc155e#offset_2382_2749> , <http://lkg.lynx-project.eu/res/00dc155e#offset_1_1065> , <http://lkg.lynx-project.eu/res/00dc155e#offset_2121_2381> , <http://lkg.lynx-project.eu/res/00dc155e#offset_1717_1866> , <http://lkg.lynx-project.eu/res/00dc155e#offset_2006_2120> , <http://lkg.lynx-project.eu/res/00dc155e#offset_1066_1295> , <http://lkg.lynx-project.eu/res/00dc155e#offset_1296_1716> , <http://lkg.lynx-project.eu/res/00dc155e#offset_1867_2005> ;
         lkg:metadata    [ eli:id_local       "stcrt-2020-32121" ;
                           eli:jurisdiction   "NL" ;

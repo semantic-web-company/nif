@@ -40,7 +40,8 @@ class TestMadridNif:
     def test_read_aardwamte(self):
         with self.aardwamte_path.open():
             try:
-                r = NIFDocument.parse_rdf(self.aardwamte_path.read_text())
+                r = NIFDocument.parse_rdf(self.aardwamte_path.read_text(),
+                                          context_class=rdflib.URIRef('http://lkg.lynx-project.eu/def/LynxDocument'))
             except Exception as e:
                 logger.warning(f'Problem parsing {self.aardwamte_path}.')
                 raise e

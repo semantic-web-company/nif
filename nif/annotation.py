@@ -310,9 +310,10 @@ class NIFAnnotation(NIFOffsetBasedString):
                     (ref_cxt_uriref, ref_cxt.uri)
             elif p == nif_ns.anchorOf:
                 kwargs['anchor_of'] = o.toPython()
+                # pass
             else:
                 other_triples.add((s, p, o))
-        # uri = s.toPython()
+        # kwargs['anchor_of'] = ref_cxt.nif__is_string[kwargs['begin_index']:kwargs['end_index']]
         kwargs['begin_end_index'] = kwargs['begin_index'], kwargs['end_index']
         del kwargs['begin_index']
         del kwargs['end_index']
@@ -358,18 +359,10 @@ class NIFContext(NIFString):
                 kwargs['is_string'] = o.toPython()
                 uri = s.toPython()
                 assert str(uri) == str(context_uri)
-            # elif p == nif_ns.beginIndex:
-            #     begin_index = int(o.toPython())
-            # elif p == nif_ns.endIndex:
-            #     end_index = int(o.toPython())
             else:
                 other_triples.add((s, p, o))
 
-        # print(cls, context_uri)
         out = cls(uri=context_uri, **kwargs)
-        # if (int(out.nif__begin_index) != begin_index or
-        #         int(out.nif__end_index) != end_index):
-        #     raise ValueError('Check the provided begin and end indices!')
         out += other_triples
         return out
 
@@ -391,7 +384,7 @@ class NIFExtractedEntity(NIFAnnotation):
 
 
 class NIFDocument:
-    def __init__(self, context, annotations=None):
+    def __init__(self, context: NIFContext, annotations: NIFAnnotation = None):
         if not NIFContext.is_context(context):
             raise TypeError('The provided context {} is not a NIFContext'
                             '.'.format(context))
@@ -421,7 +414,7 @@ class NIFDocument:
         cxt = NIFContext(is_string=text, uri=uri)
         return cls(context=cxt, annotations=[])
 
-    def add_annotations(self, anns: NIFAnnotation):
+    def add_annotations(self, anns: List[NIFAnnotation]):
         for ann in anns:
             self.annotations.append(ann)
         try:
@@ -478,25 +471,18 @@ class NIFDocument:
                   # uri_format=nif_ns.OffsetBasedString
                   **kwargs
                   ):
-        # if uri_format not in [nif_ns.OffsetBasedString, nif_ns.RFC5147String]:
-        #     raise ValueError("Only RFC5147 and OffsetBased strings are "
-        #                      "currently supported URI schemes")
         rdf_text = self.rdf.serialize(format=format, **kwargs)
-
-        # if uri_format == nif_ns.RFC5147String:
-        #     RFC5147_str = br"#char\=\(\1,\2\)"
-        #     offset_regex = br"#offset_(\d*)_(\d*)"
-        #     rdf_text = re.sub(offset_regex, RFC5147_str, rdf_text)
         return rdf_text
 
     @classmethod
-    def parse_rdf(cls, rdf_text, format="n3",
-                  uri_scheme=nif_ns.OffsetBasedString):
+    def parse_rdf(cls, rdf_text, format="n3", context_class=nif_ns.Context):
         rdf_graph = rdflib.Graph()
         rdf_graph.parse(data=rdf_text, format=format)
 
         context_uri = rdf_graph.value(predicate=rdflib.RDF.type,
-                                      object=nif_ns.Context)
+                                      object=context_class)
+        if context_uri is None:
+            raise ValueError(f'Provided RDF does not contain a context of class {context_class}.')
         context_triples = list(rdf_graph.triples((context_uri, None, None)))
         for t in context_triples:
             if isinstance(t[2], rdflib.BNode):
@@ -534,33 +520,43 @@ class NIFDocument:
 
 
 if __name__ == '__main__':
+    import rdflib
+
     rdf_to_parse = '''
-    @prefix dbo:   <http://dbpedia.org/ontology/> .
-    @prefix geo:   <http://www.w3.org/2003/01/geo/wgs84_pos/> .
-    @prefix dktnif: <http://dkt.dfki.de/ontologies/nif#> .
-    @prefix nif-ann: <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-annotation#> .
-    @prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-    @prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
-    @prefix itsrdf: <https://www.w3.org/2005/11/its/rdf-content/its-rdf.html#> .
-    @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
-    @prefix nif:   <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#> .
-
-    <http://dkt.dfki.de/documents#offset_11_17>
-            a                     nif:RFC5147String , nif:String , nif:Structure ;
-            nif:anchorOf          "Berlin" ;
-            nif:beginIndex        "11"^^xsd:nonNegativeInteger ;
-            nif:endIndex          "17"^^xsd:nonNegativeInteger ;
-            nif:referenceContext  <http://dkt.dfki.de/documents#offset_0_26> ;
-            itsrdf:taClassRef     dbo:Location ;
-            itsrdf:taIdentRef     <http://www.wikidata.org/entity/Q64> ;
-            itsrdf:taIdentRef     []  .
-
-    <http://dkt.dfki.de/documents#offset_0_26>
-            a               nif:RFC5147String , nif:String , nif:Context ;
-            nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
-            nif:endIndex    "26"^^xsd:nonNegativeInteger ;
-            nif:isString    "Welcome to Berlin in 2016." .
+{
+    "@context": "http://lynx-project.eu/doc/jsonld/lynxdocument.json",
+    "@id": "d39a661a-9a9f-45a9-b651-c7d62b314714",
+    "@type": [
+        "nif:Context",
+        "lkg:LynxDocument",
+        "lkg:CaseLaw"
+    ],
+    "metadata": {
+        "type_document": "Decision",
+        "language": "de",
+        "jurisdiction": "AT",
+        "title": {
+            "de": "Nichtigkeitsbeschwerde zur Wahrung des Gesetzes iSd § 23 StPO iZm vom Schöffengericht abweichende Verkündung des Urteils"
+        },
+        "hasAuthority": "OGH",
+        "id_local": "JJT_20160314_OGH0002_0150OS00182_15A0000_000",
+        "version_date": "2016-03-14",
+        "url_consolidated": "http://www.ris.bka.gv.at/JustizEntscheidung.wxe?Abfrage=Justiz&Dokumentnummer=JJT_20160314_OGH0002_0150OS00182_15A0000_000&IncludeSelf=True",
+        "sameAs": [
+            {
+                "@id": "https://lawthek.eu/detail/d39a661a-9a9f-45a9-b651-c7d62b314714/de/MULTI"
+            }
+        ]
+    },
+    "text": "Kopf Der Oberste Gerichtshof hat am 14. März 2016 durch den Senatspräsidenten des Obersten Gerichtshofs Prof. Dr. Danek als Vorsitzenden, den Hofrat des Obersten Gerichtshofs Mag. Lendl sowie die Hofrätinnen des Obersten Gerichtshofs Dr. Michel-Kwapinski, Mag. Fürnkranz und Dr. Mann als weitere Richter in Gegenwart der Rechtspraktikantin Mag. Fritsche als Schriftführerin in der Strafsache gegen Ersin C***** und andere Angeklagte wegen des Verbrechens des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 4 Z 3 SMG und weiterer strafbarer Handlungen, AZ 44 Hv 190/14b des Landesgerichts für Strafsachen Wien, über die Nichtigkeitsbeschwerde der Staatsanwaltschaft gegen das Urteil dieses Gerichts vom 25. September 2015 (ON 190) und die von der Generalprokuratur gegen einen Vorgang in diesem Verfahren erhobene Nichtigkeitsbeschwerde zur Wahrung des Gesetzes nach öffentlicher Verhandlung in Anwesenheit des Vertreters der Generalprokuratur, Generalanwalt Dr. Eisenmenger, des Angeklagten und seines Verteidigers Mag. Vural zu Recht erkannt: Spruch Im Verfahren AZ 44 Hv 190/14b des Landesgerichts für Strafsachen Wien verletzt der Vorgang, dass der Vorsitzende bei der Verkündung des Urteils am 25. September 2015 dem Schuldspruch A./I./ einen Reinheitsgehalt des urteilsgegenständlichen Suchtgifts Heroin von 15,59 % (§ 28a Abs 4 Z 3 SMG) zugrunde legte (§ 260 Abs 1 Z 1 StPO), obwohl nach dem Beschluss des Schöffensenats ein geringerer, (bloß) die Qualifikation des § 28a Abs 2 Z 3 SMG begründender Reinheitsgehalt angenommen worden war, § 268 erster Satz StPO. Dieses Urteil, das im Übrigen unberührt bleibt, wird in der Unterstellung des Schuldspruchs A./I./ auch unter Abs 2 Z 3 und Abs 3 zweiter Fall des § 28a SMG, demzufolge auch in dem den Angeklagten Ersin C***** betreffenden Strafausspruch (einschließlich der Vorhaftanrechnung) aufgehoben und es wird die Sache im Umfang der Aufhebung zu neuer Verhandlung und Entscheidung an das Landesgericht für Strafsachen Wien verwiesen. Die Staatsanwaltschaft wird mit ihrer Nichtigkeitsbeschwerde auf diese Entscheidung verwiesen. Text Gründe: Im Verfahren AZ 44 Hv 190/14b des Landesgerichts für Strafsachen Wien legte die Staatsanwaltschaft Wien mit Anklageschrift vom 21. Dezember 2014 (ON 138) Ersin C***** als Verbrechen des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 4 Z 3 SMG (A./I./) und Vergehen des unerlaubten Umgangs mit Suchtgiften nach § 27 Abs 1 Z 1 erster und zweiter Fall, Abs 2 SMG (D./) sowie Vladimir D***** (zu A.II./, B./) und Martin T***** (zu A.III./, B./) als Verbrechen des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 2 Z 2, Abs 4 Z 3 SMG und der Vorbereitung von Suchtgifthandel nach § 28 Abs 1 zweiter Fall, Abs 3 SMG, D***** überdies als Vergehen des unerlaubten Umgangs mit Suchtgiften nach § 27 Abs 1 Z 1 zweiter Fall SMG (C./) beurteiltes Verhalten zur Last. Zufolge des Anklagevorwurfs zu A./I./ hat Ersin C***** von Mitte August 2013 bis 13. Oktober 2014 in W***** in zahlreichen Angriffen Mustafa G***** und Liliane M***** vorschriftswidrig Suchtgift in einer das Fünfundzwanzigfache der Grenzmenge (§ 28b SMG) übersteigenden Menge überlassen, und zwar 1.300 Gramm Heroin in einer Reinsubstanz von zumindest 15,59 % (ON 138). In der Hauptverhandlung am 25. September 2015 wurde der „wesentliche Akteninhalt“ (vgl aber RIS-Justiz RS0110681), „insbesondere das Untersuchungsergebnis des Bundeskriminalamts“ betreffend das beim Zeugen Richard K***** sichergestellte Heroin, wonach das Suchtgift einen Reinheitsgehalt von 10,44 % aufwies, gemäß § 252 Abs 2a StPO einverständlich vorgetragen (ON 189 S 12). Nach dem Schluss der Verhandlung zog sich der Schöffensenat zur Urteilsberatung zurück. Nach dem Wiedererscheinen des Senats verkündete der Vorsitzende das Urteil, wonach - soweit hier von Interesse - Ersin C***** (zu A./I./) im Zeitraum Mitte August 2013 bis 23. Oktober 2014 in W***** in zahlreichen Angriffen Mustafa G***** und Liliane M***** vorschriftswidrig Suchtgift in einer das 15-fache der Grenzmenge (§ 28b SMG) übersteigenden Menge, und zwar 600 Gramm Heroin in einer Reinsubstanz von zumindest 15,59 %, durch gewinnbringenden Verkauf überlassen habe (ON 189 S 13; § 260 Abs 1 Z 1 StPO). Er habe hiedurch zu A./I./ das Verbrechen des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 2 Z 3 (gemeint auch: Abs 3 zweiter Fall) SMG begangen (§ 260 Abs 1 Z 2 StPO) und wurde hiefür zu einer (unbedingten) Freiheitsstrafe verurteilt (ON 189 S 15). Während der Angeklagte C***** - ebenso wie die beiden Mitangeklagten - Rechtsmittelverzicht erklärte, meldete die Staatsanwaltschaft (nur) zu diesem Angeklagten Nichtigkeitsbeschwerde an. In der schriftlichen Ausfertigung des Urteils (ON 190) stimmen Spruch und Gründe zu A./I./ (US 3 ff und 9) in den wesentlichen Punkten mit dem verkündeten Urteil überein. In der rechtlichen Beurteilung weist das Erstgericht darauf hin, dass auch beim Angeklagten Ersin C***** das 25-fache der Grenzmenge an Suchtgift überschritten und demnach die Privilegierung nach § 28a Abs 3 zweiter Fall SMG rechtsirrig angenommen worden sei (US 13 erster Absatz). In ihrer lediglich gegen den Schuldspruch A./I./ erhobenen, auf § 281 Abs 1 Z 10 StPO gestützten Nichtigkeitsbeschwerde (ON 205) führt die Anklagebehörde aus, dass bei der im Urteil festgestellten Suchtgiftmenge von 600 Gramm Heroin mit einem Reinheitsgehalt von 15,59 % die Grenzmenge um mehr als das 25-fache überschritten werde, sodass das inkriminierte Verbrechen richtigerweise nach § 28a Abs 4 Z 3 SMG zu qualifizieren und eine Privilegierung nach § 28a Abs 3 SMG daher ausgeschlossen sei. Am 6. November 2015 legte der Vorsitzende einen Amtsvermerk folgenden Inhalts an (bei ON 1): „Da das gegenständliche Urteil mündlich so verkündet wurde, wie nunmehr die schriftliche Urteilsausfertigung lautet, konnten keine Änderungen mehr vorgenommen werden - es blieb daher in allen Punkten beim ursprünglich angeklagten Reinheitsgrad von 15,59 %. In der Beratung mit den Schöffen ist natürlich von 'einem nicht mehr feststellbaren' Reinheitsgehalt ausgegangen worden. Alleine, wenn man die rund zehn Prozent (gemeint: Reinheitsgehalt) betrachtet, die beim Zeugen K***** sichergestellt wurden, kommt man bereits beim Faktum A./I./ bei 600 Gramm Suchtgift auf die 15-fache Menge. Zudem kommt, dass auch immer wieder die Rede von gestrecktem Suchtgift war, wenn dies auch einige Zeugen nicht bestätigten. Somit ergab sich für den Schöffensenat in der Beratung bloß die 15-fache Menge und zusätzlich auch die Privilegierung. In der mündlichen Urteilsverkündung wurde jedoch darauf vergessen, das Urteil konnte schriftlich nicht mehr anders ausgefertigt werden.“ Der Vorsitzende des aus einem Berufsrichter und zwei Schöffen zusammengesetzten Schöffensenats (§ 32 Abs 1 letzter Satz StPO) ist mit 31. Dezember 2015 in den Ruhestand getreten. Rechtliche Beurteilung Die Urteilsverkündung vom 25. September 2015 steht - wie die Generalprokuratur in ihrer zur Wahrung des Gesetzes erhobenen Nichtigkeitsbeschwerde zutreffend ausführt - hinsichtlich des Schuldspruchs A./I./ mit dem Gesetz nicht im Einklang. Gemäß § 257 erster Satz StPO hat sich das Schöffengericht nach Schluss der Verhandlung zur Urteilsfällung in das Beratungszimmer zurückzuziehen. Dort erfolgen demzufolge Beratung und Abstimmung (Lendl, WK-StPO § 257 Rz 4). Zu verkünden ist dann das in der Beratung beschlossene Urteil mit allen in § 260 Abs 1 Z 1 bis 5 und Abs 2 StPO genannten Punkten (Danek, WK-StPO § 268 Rz 1 und 7). Vorliegend gelangten die Tatrichter nach der Beratung - wovon der an den gegenteiligen Inhalt des Beratungsprotokolls nicht gebundene (vgl Ratz, WK-StPO § 281 Rz 312 und § 292 Rz 6) Oberste Gerichtshof aufgrund des Aktenvermerks des Vorsitzenden ausgeht - zum Ergebnis, der Reinheitsgehalt des zu A./I./ angenommenen Suchtgiftquantums von 600 Gramm Heroin betrage nicht 15,59 %, sondern nur etwa 10 %. Demnach wurde lediglich das Verbrechen des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 2 Z 3 SMG als verwirklicht angesehen und dem Angeklagten die Privilegierung nach § 28a Abs 3 zweiter Fall SMG zugebilligt. Bei dem vom Vorsitzenden in der Verkündung (§ 260 Abs 1 Z 1 StPO) angenommenen Reinheitsgehalt von (zumindest) 15,59 % würden 600 Gramm Heroin allerdings eine Suchtgiftmenge darstellen, die das 25-fache der Grenzmenge (§ 28b SMG) überschreitet und daher die Qualifikation des § 28a Abs 4 Z 3 SMG begründet. Da im Schöffenverfahren jenes Urteil zu verkünden ist, welches nach Beratung vom Schöffensenat beschlossen wurde, bewirkte der bezeichnete Vorgang einen Verstoß gegen § 268 erster Satz StPO. Der Vorsitzende hat durch die Verkündung einer vom gefällten Urteil abweichenden Variante des Tatgeschehens eine ihm nicht zustehende Kompetenz in Anspruch genommen (vgl RIS-Justiz RS0116267). Die Gesetzesverletzung war festzustellen. Es ist nicht auszuschließen, dass der Vorgang der verfehlten Verkündung eines die rechtliche Unterstellung der Taten (auch) nach Abs 2 Z 3 Abs 3 zweiter Fall des § 28a SMG nicht tragenden Reinheitsgehalts von 15,59 % dem Angeklagten zum Nachteil gereicht, weil die Staatsanwaltschaft das Urteil angefochten und auf Basis der vom Vorsitzenden aus seinem Fehler abgeleiteten (demnach ebenso nicht der Beschlussfassung des Schöffengerichts entsprechenden) Urteilsfeststellungen die Bestrafung des Angeklagten nach § 28a Abs 4 Z 3 SMG begehrt hat. Der Oberste Gerichtshof sah sich zur Anordnung konkreter Wirkung veranlasst (§ 292 letzter Satz StPO). In einem solchen Fall wäre es grundsätzlich ausreichend, das verkündete Urteil (im entsprechenden Umfang) zur Klarstellung zu beseitigen und - ohne Anordnung einer neuen Hauptverhandlung - dem Erstgericht aufzutragen, das tatsächlich beschlossene Urteil neu zu verkünden (vgl Danek, WK-StPO § 268 Rz 10). Bei dieser neuen Urteilsverkündung müssten alle Mitglieder des - (zumal ein Fall des § 43 Abs 2 letzter Satzteil StPO nicht vorliegt:) seinerzeitigen - Schöffensenats anwesend sein (Danek, WK-StPO § 268 Rz 3). Diesem Erfordernis steht jedoch der inzwischen angetretene Ruhestand des Vorsitzenden entgegen. Die Kaiserliche Verordnung vom 14. Dezember 1915, RGBl 1915/372, eignet sich nicht zur Behebung der vorliegenden Problemstellung, weil sie nicht die Verkündung, sondern nur die schriftliche Ausfertigung des Urteils betrifft (vgl Danek, WK-StPO § 270 Rz 3). Demgemäß waren die Unterstellung der dem Schuldspruch A./I./ zugrunde liegenden Taten auch unter Abs 2 Z 3 und Abs 3 zweiter Fall des § 28a SMG und der Strafausspruch über den Angeklagten C***** aufzuheben und es war in diesem Umfang die neue Verhandlung (vor einem neuen Spruchkörper) und Entscheidung anzuordnen. Bleibt anzumerken, dass sich selbst unter der Prämisse, die Divergenz zwischen beschlossenem und verkündetem Urteil beziehe sich auch auf den Zweit- und den Drittangeklagten (vgl Amtsvermerk erster Absatz: „in allen Punkten“), hinsichtlich dieser kein Bedarf für eine Maßnahme gemäß § 290 Abs 1 StPO ergibt, weil auch bei Annahme eines Reinheitsgehalts von etwa 10 % des von ihnen verhandelten Suchtgifts die Qualifikation des § 28a Abs 4 Z 3 SMG erfüllt wäre und sich sohin am Schuldspruch nichts ändern würde. Die Staatsanwaltschaft war mit ihrer Nichtigkeitsbeschwerde auf diese Entscheidung zu verweisen.",
+    "offset_ini": 0,
+    "offset_end": 11291
+}
     '''
+
+    g = rdflib.Graph().parse(data=rdf_to_parse, format='json-ld')
+    n = NIFDocument.parse_rdf(g.serialize(format='n3'), format='n3')
+    print(n)
     #
     # print(f'Input: {rdf_to_parse}')
     # parsed = NIFDocument.parse_rdf(rdf_to_parse, format='turtle')
@@ -574,10 +570,10 @@ if __name__ == '__main__':
     # print(f'nif:anchorOf: "{ann.nif__anchor_of}", '
     #       f'itsrdf:taClassRef: "{ann.itsrdf__ta_class_ref}"')
 
-    nifDocument = rdf_to_parse
-    d = NIFDocument.parse_rdf(nifDocument, format='turtle')
-    ann = NIFAnnotation(begin_end_index=(0, len(d.context.nif__is_string)))
-    ann.nif__summary = "<your summary here>"
-    d.add_annotations([ann])
+    # nifDocument = rdf_to_parse
+    # d = NIFDocument.parse_rdf(nifDocument, format='turtle')
+    # ann = NIFAnnotation(begin_end_index=(0, len(d.context.nif__is_string)))
+    # ann.nif__summary = "<your summary here>"
+    # d.add_annotations([ann])
 
 
