@@ -1,0 +1,124 @@
+CHANGES
+=======
+
+v0.1.20
+-------
+
+* Add context class as input parameter
+
+v0.1.19
+-------
+
+* Add kwargs to serialization -> enable jsonld
+
+v0.1.18
+-------
+
+* Debug nif\_classes accumulation
+* Minor changes
+
+v0.1.17
+-------
+
+* Check if annotation is nif:Annotation and belongs to context when parsing NIFDocument from string
+
+v0.1.16
+-------
+
+* Bugfix
+
+v0.1.15
+-------
+
+* bugfix
+
+v0.1.14
+-------
+
+* Add annotations in a batch and then validate - speed up adding annotations
+
+v0.1.13
+-------
+
+* Bugfix: addiotional params for AnnotationUnit
+
+v0.1.12
+-------
+
+* Add kwargs to be passed to AnnotationUnit - supply the annotator value
+
+v0.1.9
+------
+
+* Add lkg namespace, allow additional classes for annotation (lkg:annotation)
+
+v0.1.8
+------
+
+* The suffices are processed more accurately according to NIF2.1 spec; NIFContext does not have to comply to URI scheme. Other minor changes. Complies with LynxDocument
+
+v0.1.7
+------
+
+* Add AnnotationUnit type
+
+v0.1.6
+------
+
+* Add datatype to begin and end index
+
+v0.1.5
+------
+
+* Use substring from original text as anchor to better match
+
+v0.1.4
+------
+
+* Add nif:TextSpanAnnotation
+
+v0.1.3
+------
+
+* Make nif\_\_anchor\_of optional for NIFAnnotation
+
+v0.1.2
+------
+
+* Add \_\_version\_\_ to nif package
+* Add \_\_version\_\_ to nif package
+
+v0.1.1
+------
+
+* Add \_\_copy\_\_ and \_\_eq\_\_ for NIFDocument
+* Parse annotation units properly
+
+v0.1.0
+------
+
+* Use annotation units as in NIF 2.1
+
+v0.0.2
+------
+
+* Load NIFDocument's rdf dynamically
+* Do not use f-strings
+* Add TODOs
+
+v0.0.1
+------
+
+* Improve parsing to take all triples, also non-NIF
+* further testing?
+* Added method to create NIFDocument from serialized RDF/NIF
+* Validation of anchor and ref context in lowercase
+* Correct concept indices in string
+* fixed conflicts
+* Publishing Nif Library
+* Add method for adding extracted concepts to the document
+* Add validations and finalize NIFDocument
+* Add README.md
+* Remove .idea
+* Add .gitignore
+* Initial commit

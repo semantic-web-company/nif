@@ -40,5 +40,6 @@ ns_dict = {'nif': nif_ns,
            'rdfs': rdflib.RDFS,
            'owl': rdflib.OWL,
            'lkg': lynx_ns,
+           'skos': rdflib.namespace.SKOS,
            # 'dct': rdflib.namespace.DCTERMS,
            'eli': eli_ns}

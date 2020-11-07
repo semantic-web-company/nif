@@ -3,3 +3,4 @@
 /nif/parse_ols_sample.py
 /nif/decision.py
 *.bkp
+dist
