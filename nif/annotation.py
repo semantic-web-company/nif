@@ -384,7 +384,7 @@ class NIFExtractedEntity(NIFAnnotation):
 
 
 class NIFDocument:
-    def __init__(self, context: NIFContext, annotations: NIFAnnotation = None):
+    def __init__(self, context: NIFContext, annotations: List[NIFAnnotation] = None):
         if not NIFContext.is_context(context):
             raise TypeError('The provided context {} is not a NIFContext'
                             '.'.format(context))
@@ -482,7 +482,7 @@ class NIFDocument:
         context_uri = rdf_graph.value(predicate=rdflib.RDF.type,
                                       object=context_class)
         if context_uri is None:
-            raise ValueError(f'Provided RDF does not contain a context of class {context_class}.')
+            raise ValueError(f'Provided RDF: \n{rdf_graph[:]}\n does not contain a context of class {context_class}.')
         context_triples = list(rdf_graph.triples((context_uri, None, None)))
         for t in context_triples:
             if isinstance(t[2], rdflib.BNode):
