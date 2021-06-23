@@ -13,10 +13,7 @@ class TestNIFString:
 
     def test_setattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri='http://example.com')
-        end_index = len(self.text)
-        assert str(nif_str.uri) == f'http://example.com', \
-            nif_str.uri
+                             uri_prefix='http://example.com')
         title_str = 'prefLabel'
         nif_str.rdfs__label = title_str
         rdf_title = nif_str.value(predicate=rdflib.RDFS.label,
@@ -37,10 +34,7 @@ class TestNIFString:
 
     def test_addattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri='http://example.com')
-        end_index = len(self.text)
-        assert str(nif_str.uri) == f'http://example.com', \
-            nif_str.uri
+                             uri_prefix='http://example.com')
         title_str = 'prefLabel'
         nif_str.addattr('rdfs__label', title_str)
         rdf_title = nif_str.value(predicate=rdflib.RDFS.label,
@@ -65,10 +59,7 @@ class TestNIFString:
 
     def test_delattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri='http://example.com')
-        end_index = len(self.text)
-        assert str(nif_str.uri) == f'http://example.com', \
-            nif_str.uri
+                             uri_prefix='http://example.com')
         title_str = 'prefLabel'
         nif_str.addattr('rdfs__label', title_str)
         nif_str.delattr('rdfs__label', title_str)
@@ -85,14 +76,14 @@ class TestAnnotation:
         self.text = 'Vodka and a Martini go to a bar and this is English and Alex is a name and sepsis is a disease.'
         self.cxt = NIFContext(
             is_string=self.text,
-            uri="http://some.doc/" + str(uuid.uuid4())
+            uri_prefix="http://some.doc/" + str(uuid.uuid4())
         )
 
     def test_context_created(self):
         text = 'some string. some other string.'
         cxt = NIFContext(
             is_string=text,
-            uri="http://some.doc/" + str(uuid.uuid4())
+            uri_prefix="http://some.doc/" + str(uuid.uuid4())
         )
         subject_uri = cxt.value(predicate=nif_ns.isString,
                                 object=rdflib.Literal(text))
@@ -103,11 +94,10 @@ class TestAnnotation:
         text = 'some string. some other string.'
         cxt = NIFContext(
             is_string=text,
-            uri="http://some.doc/" + str(uuid.uuid4())
+            uri_prefix="http://some.doc/" + str(uuid.uuid4())
         )
-        ann = NIFAnnotation(
-            begin_end_index=(0, len(text)), is_string=text,
-            ta_ident_ref=None, reference_context=cxt,
+        ann = NIFString(
+            begin_end_index=(0, len(text)), reference_context=cxt,
             anchor_of=text, nif__keyword='keyword')
         kw = ann.value(predicate=nif_ns.keyword, subject=ann.uri)
         assert kw, kw
@@ -116,7 +106,7 @@ class TestAnnotation:
     def test_wrong_anchor(self):
         text = 'this is a phrase'
         with nose.tools.assert_raises(ValueError):
-            NIFAnnotation(
+            NIFString(
                 begin_end_index=(0, 4),
                 reference_context=self.cxt,
                 anchor_of=text)
@@ -137,7 +127,7 @@ class TestAnnotation:
         au2 = NIFAnnotationUnit()
         for p, o in au2_dict.items():
             au2.__setattr__(p, o)
-        ann_alex = NIFAnnotation(
+        ann_alex = NIFStructure(
             begin_end_index=(56, 60),
             reference_context=self.cxt,
             anchor_of="Alex",
@@ -156,7 +146,7 @@ class TestContext:
     def test_context_created(self):
         cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
-            uri="http://some.doc/" + str(uuid.uuid4())
+            uri_prefix="http://some.doc/" + str(uuid.uuid4())
         )
 
     def test_from_triples(self):
@@ -188,7 +178,7 @@ class TestExtractedEntity:
     def test_phrase_created(self):
         self.cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
-            uri="http://some.doc/" + str(uuid.uuid4())
+            uri_prefix="http://some.doc/" + str(uuid.uuid4())
         )
         ex_uri = 'http://example.com/index#some'
         ee = NIFExtractedEntity(
@@ -203,7 +193,7 @@ class TestExtractedEntity:
     def test_phrase_mutations_check(self):
         self.cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
-            uri="http://some.doc/" + str(uuid.uuid4())
+            uri_prefix="http://some.doc/" + str(uuid.uuid4())
         )
         ex_uri = 'http://example.com/index#some'
         ee = NIFExtractedEntity(
@@ -217,7 +207,7 @@ class TestExtractedEntity:
 
     def test_annotators_ref(self):
         cxt = NIFContext(is_string='I like Madrid. Article 1. Europe is good.',
-                         uri='https://lynx.poolparty.biz')
+                         uri_prefix='https://lynx.poolparty.biz')
         nif_doc = NIFDocument(context=cxt)
         cpt = {'prefLabel': [], 'frequencyInDocument': 1, 'uri': 'http://vocabulary.semantic-web.at/CBeurovoc/C909', 'score': 100.0, 'transitiveBroaderConcepts': ['http://vocabulary.semantic-web.at/CBeurovoc/MT7206'], 'transitiveBroaderTopConcepts': [], 'relatedConcepts': [], 'matchings': [{'text': 'europe', 'frequency': 1, 'positions': [(26, 32)]}]}
         nif_doc.add_extracted_cpts(
@@ -237,10 +227,10 @@ class TestDocument:
         self.uri_prefix = "http://some.doc/" + str(uuid.uuid4())
         self.cxt = NIFContext(
             is_string=self.txt,
-            uri=self.uri_prefix)
+            uri_prefix=self.uri_prefix)
         self.cxt2 = NIFContext(
             is_string=self.txt[:-1],
-            uri="http://some.doc/" + str(uuid.uuid4()))
+            uri_prefix="http://some.doc/" + str(uuid.uuid4()))
         ex_uri = 'http://example.com/index#some'
         self.ee = NIFExtractedEntity(
             reference_context=self.cxt,
@@ -281,7 +271,7 @@ class TestDocument:
         d = NIFDocument.from_text(self.txt, self.uri_prefix)
         assert d.context.uri.startswith(self.uri_prefix), (d.uri_prefix,
                                                            self.uri_prefix)
-        assert d.uri_prefix == self.uri_prefix, (d.uri_prefix, self.uri_prefix)
+        assert d.uri_prefix.startswith(self.uri_prefix), (d.uri_prefix, self.uri_prefix)
         assert d.context.uri.startswith(self.uri_prefix)
 
     def test_add_struct(self):
@@ -304,18 +294,6 @@ class TestDocument:
         d = NIFDocument(context=self.cxt, annotations=[])
         d.add_extracted_cpts([cpt])
 
-    # def test_copy(self):
-    #     cpt = {
-    #         'uri': 'http://some.uri',
-    #         'matchings': [
-    #             {'text': 'larger', 'positions': [(5, 11)]},
-    #             {'text': 'this', 'positions': [(21, 25), (41, 45)]}
-    #         ]
-    #     }
-    #     d = NIFDocument(context=self.cxt, annotations=[])
-    #     d.add_extracted_cpts([cpt])
-    #     assert d == d.__copy__()
-
 
 class TestSuffix:
     def test_suffix(self):
@@ -326,48 +304,73 @@ class TestSuffix:
         assert str(r) == 'http://dkt.dfki.de/documents#offset_0_26', r
 
 
-# class TestParsing:
-#     def setUp(self):
-#         self.rdf_to_parse = '''
-# @prefix dbo:   <http://dbpedia.org/ontology/> .
-# @prefix geo:   <http://www.w3.org/2003/01/geo/wgs84_pos/> .
-# @prefix dktnif: <http://dkt.dfki.de/ontologies/nif#> .
-# @prefix nif-ann: <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-annotation#> .
-# @prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-# @prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
-# @prefix itsrdf: <http://www.w3.org/2005/11/its/rdf#> .
-# @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
-# @prefix nif:   <http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#> .
-#
-# <http://dkt.dfki.de/documents#offset_11_17>
-#         a                     nif:RFC5147String , nif:String , nif:Structure ;
-#         nif:anchorOf          "Berlin" ;
-#         nif:beginIndex        "11"^^xsd:nonNegativeInteger ;
-#         nif:endIndex          "17"^^xsd:nonNegativeInteger ;
-#         nif:referenceContext  <http://dkt.dfki.de/documents#offset_0_26> ;
-#         itsrdf:taClassRef     dbo:Location ;
-#         itsrdf:taIdentRef     <http://www.wikidata.org/entity/Q64> ;
-#         itsrdf:taIdentRef     []  .
-#
-# <http://dkt.dfki.de/documents#offset_0_26>
-#         a               nif:RFC5147String , nif:String , nif:Context ;
-#         nif:beginIndex  "0"^^xsd:nonNegativeInteger ;
-#         nif:endIndex    "26"^^xsd:nonNegativeInteger ;
-#         nif:isString    "Welcome to Berlin in 2016." .
-# '''
-#
-#     def test_parse_correct(self):
-#         parsed = NIFDocument.parse_rdf(self.rdf_to_parse, format='turtle')
-#         serialized = parsed.serialize(format='turtle')
-#         print(serialized)
-#         g_original = rdflib.Graph()
-#         g_original.parse(data=self.rdf_to_parse, format='turtle')
-#         g_processed = rdflib.Graph()
-#         g_processed.parse(data=serialized, format='turtle')
-#
-#         sp_pairs_original = [(s, p) for s, p, o in g_original]
-#         sp_orig_counter = Counter(sp_pairs_original)
-#         sp_pairs_processed = [(s, p) for s, p, o in g_processed]
-#         sp_processed_counter = Counter(sp_pairs_processed)
-#         for k, v in (sp_orig_counter - sp_processed_counter).items():
-#             assert v <= 0, (k,v)
+class TestSentenceWord:
+    def setUp(self):
+        self.txt = 'some larger context. this is a phrase in this context.'
+        self.sents = [x+'.' for x in self.txt.split('.')]
+        self.words1 = self.sents[0].split(' ')
+        self.uri_prefix = "http://some.doc/" + str(uuid.uuid4())
+        self.cxt = NIFContext(
+            is_string=self.txt,
+            uri_prefix=self.uri_prefix)
+
+    def test_next_and_previous_sentence(self):
+        sent1 = NIFSentence(begin_end_index=(0, len(self.sents[0])),
+                            reference_context=self.cxt,
+                            anchor_of=self.sents[0])
+        sent2 = NIFSentence(begin_end_index=(len(self.sents[0]), len(self.sents[0]) + len(self.sents[1])),
+                            reference_context=self.cxt,
+                            anchor_of=self.sents[1],
+                            previous_sentence=sent1)
+        sent1.nif__next_sentence = sent2.uri
+        assert sent1.nif__next_sentence == sent2.uri
+        assert sent2.nif__previous_sentence == sent1.uri
+
+    def test_sentence_words(self):
+        sent1 = NIFSentence(begin_end_index=(0, len(self.sents[0])),
+                            reference_context=self.cxt,
+                            anchor_of=self.sents[0])
+        nif_words = []
+        start = 0
+        for word in self.words1:
+            end = start + len(word)
+            nw = NIFWord(begin_end_index=(start, end),
+                         reference_context=self.cxt,
+                         anchor_of=word)
+            nif_words.append(nw)
+            sent1.addattr('nif__word', nw.uri)
+            start = end + 1
+        assert len(sent1.nif__word) == len(self.words1)
+
+    def test_sentence_words2(self):
+        nif_words = []
+        start = 0
+        for word in self.words1:
+            end = start + len(word)
+            nw = NIFWord(begin_end_index=(start, end),
+                         reference_context=self.cxt,
+                         anchor_of=word)
+            nif_words.append(nw)
+            start = end + 1
+
+        sent1 = NIFSentence(begin_end_index=(0, len(self.sents[0])),
+                            reference_context=self.cxt,
+                            anchor_of=self.sents[0],
+                            words=nif_words)
+        assert len(sent1.nif__word) == len(self.words1)
+
+    def test_next_previous_words(self):
+        nif_words = []
+        start = 0
+        for word in self.words1:
+            end = start + len(word)
+            nw = NIFWord(begin_end_index=(start, end),
+                         reference_context=self.cxt,
+                         anchor_of=word)
+            nif_words.append(nw)
+            start = end + 1
+
+        nw1 = nif_words[0]
+        nw2 = nif_words[1]
+        nw1.nif__next_word = nw2
+        nw2.nif__previous_word = nw1

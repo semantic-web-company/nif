@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -47,7 +48,6 @@ class TestMadridNif:
                 raise e
             g = rdflib.Graph().parse(data=self.aardwamte_path.read_text(),
                                      format='n3')
-        print(r.serialize(format='turtle').decode())
         assert len(g) <= len(r.rdf), (len(g), len(r.rdf))
         lynx_doc_parts = r.rdf[:rdflib.RDF.type:rdflib.URIRef("http://lkg.lynx-project.eu/def/LynxDocumentPart")]
         for doc_part in lynx_doc_parts:
@@ -55,3 +55,26 @@ class TestMadridNif:
             assert (doc_part, rdflib.RDF.type, nif_ns.Annotation) not in r.rdf, (doc_part, rdflib.RDF.type, nif_ns.Annotation)
         # print(self.aardwamte_path)
         # print(r.serialize(format='n3').decode())
+
+
+class TestWordsNIF:
+    def setUp(self):
+        self.examples_path = Path(os.getenv('EXAMPLES_PATH', default='../examples'))
+        self.words_paths = [
+            self.examples_path / filename
+            for filename in os.listdir(self.examples_path)
+            if re.match(r'words.*\.ttl', filename)
+        ]
+
+    def test_read(self):
+        for file_path in self.words_paths:
+            with file_path.open():
+                g = rdflib.Graph().parse(data=file_path.read_text(), format='turtle')
+                try:
+                    r = NIFDocument.parse_rdf(file_path.read_text())
+                except Exception as e:
+                    logger.warning(f'Problem parsing {file_path}.')
+                    raise e
+            assert len(g) <= len(r.rdf), (len(g), len(r.rdf))
+
+        print(r.context.serialize(format='n3').decode())
