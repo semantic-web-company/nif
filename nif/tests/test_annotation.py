@@ -13,7 +13,7 @@ class TestNIFString:
 
     def test_setattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri_prefix='http://example.com')
+                             uri='http://example.com')
         title_str = 'prefLabel'
         nif_str.rdfs__label = title_str
         rdf_title = nif_str.value(predicate=rdflib.RDFS.label,
@@ -34,7 +34,7 @@ class TestNIFString:
 
     def test_addattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri_prefix='http://example.com')
+                             uri='http://example.com')
         title_str = 'prefLabel'
         nif_str.addattr('rdfs__label', title_str)
         rdf_title = nif_str.value(predicate=rdflib.RDFS.label,
@@ -59,7 +59,7 @@ class TestNIFString:
 
     def test_delattr(self):
         nif_str = NIFContext(is_string=self.text,
-                             uri_prefix='http://example.com')
+                             uri='http://example.com')
         title_str = 'prefLabel'
         nif_str.addattr('rdfs__label', title_str)
         nif_str.delattr('rdfs__label', title_str)
@@ -76,14 +76,14 @@ class TestAnnotation:
         self.text = 'Vodka and a Martini go to a bar and this is English and Alex is a name and sepsis is a disease.'
         self.cxt = NIFContext(
             is_string=self.text,
-            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
 
     def test_context_created(self):
         text = 'some string. some other string.'
         cxt = NIFContext(
             is_string=text,
-            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
         subject_uri = cxt.value(predicate=nif_ns.isString,
                                 object=rdflib.Literal(text))
@@ -94,7 +94,7 @@ class TestAnnotation:
         text = 'some string. some other string.'
         cxt = NIFContext(
             is_string=text,
-            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
         ann = NIFString(
             begin_end_index=(0, len(text)), reference_context=cxt,
@@ -134,8 +134,8 @@ class TestAnnotation:
             annotation_units=[au1, au2]
         )
         assert len(ann_alex.annotation_units) == 2
-        assert float(ann_alex.annotation_units[au1.uri].nif__confidence) == 1.0, ann_alex.annotation_units[au1.uri].nif__confidence
-        ann_alex.remove_annotation_unit(au1.uri)
+        assert float(ann_alex.annotation_units[0].nif__confidence) == 1.0, ann_alex.annotation_units[0].nif__confidence
+        ann_alex.annotation_units = [au2]
         assert len(ann_alex.annotation_units) == 1
 
 
@@ -146,7 +146,7 @@ class TestContext:
     def test_context_created(self):
         cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
-            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
 
     def test_from_triples(self):
@@ -178,25 +178,25 @@ class TestExtractedEntity:
     def test_phrase_created(self):
         self.cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
-            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
         ex_uri = 'http://example.com/index#some'
-        ee = NIFExtractedEntity(
+        ee = SWCNIFMatchedResourceOccurence(
             reference_context=self.cxt,
             begin_end_index=(0, 4),
             anchor_of='some',
             entity_uri=ex_uri
         )
-        ta_ident_ref = next(iter(ee.annotation_units.values())).itsrdf__ta_ident_ref
+        ta_ident_ref = ee.annotation_units[0].itsrdf__ta_ident_ref
         assert str(ta_ident_ref) == ex_uri, ta_ident_ref
 
     def test_phrase_mutations_check(self):
         self.cxt = NIFContext(
             is_string='some larger context. this is a phrase in this context.',
-            uri_prefix="http://some.doc/" + str(uuid.uuid4())
+            uri="http://some.doc/" + str(uuid.uuid4())
         )
         ex_uri = 'http://example.com/index#some'
-        ee = NIFExtractedEntity(
+        ee = SWCNIFMatchedResourceOccurence(
             reference_context=self.cxt,
             begin_end_index=(0, 4),
             anchor_of='some',
@@ -207,16 +207,18 @@ class TestExtractedEntity:
 
     def test_annotators_ref(self):
         cxt = NIFContext(is_string='I like Madrid. Article 1. Europe is good.',
-                         uri_prefix='https://lynx.poolparty.biz')
+                         uri='https://lynx.poolparty.biz')
         nif_doc = NIFDocument(context=cxt)
         cpt = {'prefLabel': [], 'frequencyInDocument': 1, 'uri': 'http://vocabulary.semantic-web.at/CBeurovoc/C909', 'score': 100.0, 'transitiveBroaderConcepts': ['http://vocabulary.semantic-web.at/CBeurovoc/MT7206'], 'transitiveBroaderTopConcepts': [], 'relatedConcepts': [], 'matchings': [{'text': 'europe', 'frequency': 1, 'positions': [(26, 32)]}]}
         nif_doc.add_extracted_cpts(
             [cpt],
-            au_kwargs={'itsrdf__ta_annotators_ref': ns_dict['lkg']['EL']},
+            confidence=1,
+            annotator_uri=ns_dict['lkg']['EL'],
             rdf__type=ns_dict['lkg']['LynxAnnotation'])
-        au = list(nif_doc.annotations[0].annotation_units.values())[0]
+        au = nif_doc.annotations[0].annotation_units[0]
         # check itsrdf:taAnnotatorsRef is present
         annotators = list(au[:ns_dict['itsrdf']['taAnnotatorsRef']:])
+        print(annotators)
         assert annotators, list(au[:])
         assert len(au) >= 3
 
@@ -227,17 +229,17 @@ class TestDocument:
         self.uri_prefix = "http://some.doc/" + str(uuid.uuid4())
         self.cxt = NIFContext(
             is_string=self.txt,
-            uri_prefix=self.uri_prefix)
+            uri=self.uri_prefix)
         self.cxt2 = NIFContext(
             is_string=self.txt[:-1],
-            uri_prefix="http://some.doc/" + str(uuid.uuid4()))
+            uri="http://some.doc/" + str(uuid.uuid4()))
         ex_uri = 'http://example.com/index#some'
-        self.ee = NIFExtractedEntity(
+        self.ee = SWCNIFMatchedResourceOccurence(
             reference_context=self.cxt,
             begin_end_index=(0, 4),
             anchor_of='some',
             entity_uri=ex_uri)
-        self.ee2 = NIFExtractedEntity(
+        self.ee2 = SWCNIFMatchedResourceOccurence(
             reference_context=self.cxt2,
             begin_end_index=(0, 4),
             anchor_of='some',
@@ -312,7 +314,7 @@ class TestSentenceWord:
         self.uri_prefix = "http://some.doc/" + str(uuid.uuid4())
         self.cxt = NIFContext(
             is_string=self.txt,
-            uri_prefix=self.uri_prefix)
+            uri=self.uri_prefix)
 
     def test_next_and_previous_sentence(self):
         sent1 = NIFSentence(begin_end_index=(0, len(self.sents[0])),

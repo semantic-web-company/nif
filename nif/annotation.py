@@ -1,16 +1,24 @@
 import uuid
-from typing import List
+from enum import Enum
+from typing import List, Tuple
 
 import rdflib
 
 from nif.namespace import ns_dict
 
 nif_ns = ns_dict['nif']
-swcres_ns = rdflib.Namespace('https://semantic-web.com/research/namespace#')
+swcnif_ns = rdflib.Namespace('https://semantic-web.com/research/nif#')
 
 
 class NIFError(Exception):
     pass
+
+
+class URIScheme(Enum):
+    nif_ns.ContextHashBasedString = nif_ns.ContextHashBasedString
+    nif_ns.RFC5147String = nif_ns.RFC5147String
+    nif_ns.CStringInst = nif_ns.CStringInst
+    nif_ns.OffsetBasedString = nif_ns.OffsetBasedString
 
 
 def do_suffix_offset(uri, begin_index, end_index):
@@ -26,6 +34,23 @@ def do_suffix_offset(uri, begin_index, end_index):
         out = uri_str + chars_indicator + '{}_{}'.format(begin_index,
                                                          end_index)
     return rdflib.URIRef(out)
+
+
+def apply_uri_scheme(nif_resource,
+                     uri_prefix: str,
+                     uri_scheme: URIScheme,
+                     begin_end_index: Tuple[int, int]):
+    # assert uri_scheme in [nif_ns.ContextHashBasedString,
+    #                       nif_ns.RFC5147String, nif_ns.CStringInst,
+    #                       nif_ns.OffsetBasedString]
+    if uri_scheme == nif_ns.OffsetBasedString:
+        nif_classes = list(nif_resource.rdf_classes)
+        nif_classes.append(uri_scheme)
+        nif_resource.rdf_classes = tuple(nif_classes)
+        nif_resource.uri = do_suffix_offset(uri_prefix, *begin_end_index)
+    else:
+        raise NotImplementedError(f'The URI scheme {uri_scheme} is not implemented yet.')
+
 
 
 def _parse_attr_name(name):
@@ -53,7 +78,7 @@ def register_ns(key, ns):
     assert isinstance(ns, rdflib.Namespace)
     ns_dict[key] = ns
 
-register_ns('swcres', swcres_ns)
+register_ns('swcnif', swcnif_ns)
 
 
 def to_rdf_literal(value, datatype=None):
@@ -66,12 +91,7 @@ def to_rdf_literal(value, datatype=None):
         return rdflib.Literal(value)
 
 
-class RDFGetSetMixin(rdflib.Graph):
-    # def __init__(self, uri=None, **kwargs):
-    #     super().__init__()
-    #     for key, val in kwargs.items():
-    #         self.__setattr__(key, val)
-    #     self.uri = uri or rdflib.BNode()
+class NIFGetSetMixin(rdflib.Graph):
 
     def __getattr__(self, name):
         if name.startswith("_"):
@@ -93,7 +113,10 @@ class RDFGetSetMixin(rdflib.Graph):
             super().__setattr__(name, value)
         elif '__' in name:
             predicate = _parse_attr_name(name)
-            if isinstance(value, (list, tuple)):
+            self.remove((self.uri, predicate, None))
+            if value is None or (hasattr(value, "__len__") and len(value) == 0):
+                pass
+            elif isinstance(value, (list, tuple)):
                 self.remove((self.uri, predicate, None))
                 for val_item in value:
                     self.add((self.uri, predicate,
@@ -130,8 +153,8 @@ class RDFGetSetMixin(rdflib.Graph):
         if validate:
             self.validate()
 
-    def add_nif_classes(self):
-        for cls in self.nif_classes:
+    def add_rdf_classes(self):
+        for cls in self.rdf_classes:
             self.add((self.uri, rdflib.RDF.type, cls))
         return self
 
@@ -139,8 +162,29 @@ class RDFGetSetMixin(rdflib.Graph):
         raise NotImplementedError
 
 
-class NIFAnnotationUnit(RDFGetSetMixin):
-    nif_classes = (nif_ns.AnnotationUnit,)
+class NIFAnnotation(NIFGetSetMixin):
+    rdf_classes = (nif_ns.Annotation,)
+
+    def __init__(self,
+                 uri: str = None,
+                 **kwargs):
+        """
+        A class to store NIF annotation block for a single entity.
+
+        :param **kwargs: any additional (predicate, object) pairs
+        """
+        super(NIFAnnotation, self).__init__()
+        self.uri = rdflib.URIRef(uri) if uri is not None else rdflib.BNode()
+        for key, val in kwargs.items():
+            self.__setattr__(key, val)
+        self.add_rdf_classes()
+
+    def validate(self):
+        return True
+
+
+class NIFAnnotationUnit(NIFAnnotation):
+    rdf_classes = (nif_ns.AnnotationUnit,)
 
     def __init__(self,
                  uri: str = None,
@@ -149,23 +193,19 @@ class NIFAnnotationUnit(RDFGetSetMixin):
         :param str uri: URI of this AU
         :param dict po_dict: predict to object dict. predicates are URIRefs
         """
-        super(NIFAnnotationUnit, self).__init__()
-        self.uri = uri or rdflib.BNode()
-        for key, val in kwargs.items():
-            self.__setattr__(key, val)
-        self.add_nif_classes()
-
-    def validate(self):
-        return True
+        super(NIFAnnotationUnit, self).__init__(uri=uri, **kwargs)
 
 
-class NIFAnnotation(RDFGetSetMixin):
-    nif_classes = (nif_ns.Annotation,)
+class NIFString(NIFGetSetMixin):
+    rdf_classes = (nif_ns.String, )
 
     def __init__(self,
                  begin_end_index,
-                 uri_prefix,
+                 # uri_prefix,
+                 reference_context,
                  uri_scheme=nif_ns.OffsetBasedString,
+                 annotation_units: List[NIFAnnotationUnit] = None,
+                 anchor_of=None,
                  **kwargs):
         """
         A class to store NIF annotation block for a single entity.
@@ -181,19 +221,26 @@ class NIFAnnotation(RDFGetSetMixin):
         :param anchor_of: see http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core/nif-core.html#d4e395
         :param **kwargs: any additional (predicate, object) pairs
         """
-        super(NIFAnnotation, self).__init__()
-        uri_prefix = rdflib.URIRef(uri_prefix) or rdflib.BNode()
+        super(NIFString, self).__init__()
+        assert reference_context is not None
+        self.reference_context = reference_context
 
-        assert uri_scheme in [nif_ns.ContextHashBasedString,
-                              nif_ns.RFC5147String, nif_ns.CStringInst,
-                              nif_ns.OffsetBasedString]
-        if uri_scheme == nif_ns.OffsetBasedString:
-            nif_classes = list(self.nif_classes)
-            nif_classes.append(uri_scheme)
-            self.nif_classes = tuple(nif_classes)
-            self.uri = do_suffix_offset(uri_prefix, *begin_end_index)
-        else:
-            raise NotImplementedError(f'The URI scheme {uri_scheme} is not implemented yet.')
+        # uri_prefix = rdflib.URIRef(uri_prefix) or rdflib.BNode()
+        if not isinstance(self, NIFContext):
+            uri_prefix = reference_context.uri
+            apply_uri_scheme(self, uri_prefix, uri_scheme, begin_end_index)
+            self.__setattr__('nif__reference_context', reference_context.uri,
+                             validate=False)
+        # assert uri_scheme in [nif_ns.ContextHashBasedString,
+        #                       nif_ns.RFC5147String, nif_ns.CStringInst,
+        #                       nif_ns.OffsetBasedString]
+        # if uri_scheme == nif_ns.OffsetBasedString:
+        #     nif_classes = list(self.rdf_classes)
+        #     nif_classes.append(uri_scheme)
+        #     self.rdf_classes = tuple(nif_classes)
+        #     self.uri = do_suffix_offset(uri_prefix, *begin_end_index)
+        # else:
+        #     raise NotImplementedError(f'The URI scheme {uri_scheme} is not implemented yet.')
 
         for key, val in kwargs.items():
             self.__setattr__(key, val)
@@ -207,36 +254,90 @@ class NIFAnnotation(RDFGetSetMixin):
                          datatype=rdflib.XSD.nonNegativeInteger)
         self.__setattr__('nif__end_index', begin_end_index[1], validate=False,
                          datatype=rdflib.XSD.nonNegativeInteger)
-        self.add_nif_classes()
+        if anchor_of is not None:
+            self.__setattr__('nif__anchor_of', anchor_of, validate=False)
+        self.add_rdf_classes()
+        self.validate()
+        self.annotation_units = annotation_units
+
+    @property
+    def annotation_units(self):
+        return self.annotation_units_
+
+    @annotation_units.setter
+    def annotation_units(self, aus: List[NIFAnnotationUnit]):
+        aus_ = aus or []
+        if aus_:
+            self.nif__annotation_unit = [au.uri for au in aus]
+        self.annotation_units_ = aus_
+
+    # def __init__(self,
+    #              begin_end_index,
+    #              reference_context,
+    #              anchor_of=None,
+    #              **kwargs):
+    #     assert reference_context is not None
+    #     uri_prefix = reference_context.uri
+    #     self.reference_context = reference_context
+    #     super().__init__(begin_end_index=begin_end_index,
+    #                      uri_prefix=uri_prefix,
+    #                      **kwargs)
+    #     self.__setattr__('nif__reference_context', reference_context.uri,
+    #                      validate=False)
+    #     if anchor_of is not None:
+    #         self.__setattr__('nif__anchor_of', anchor_of, validate=False)
+    #     self.validate()
+
+    def validate(self):
+        if self.reference_context is not None:
+            if not NIFContext.is_context(self.reference_context):
+                raise ValueError(
+                    'The provided reference context is not compatible with '
+                    'nif.Context class.')
+        if self.nif__anchor_of is not None:
+            ref_substring = self.reference_context.nif__is_string[
+                            int(self.nif__begin_index):int(self.nif__end_index)]
+            # Extractor returns different capitalization in matches!
+            if self.nif__anchor_of.toPython().lower() != ref_substring.lower():
+                raise ValueError(
+                    'Anchor should be equal exactly to the subtring of '
+                    'the reference context. You have anchor = "{}", '
+                    'substring in ref context = "{}"'.format(
+                        self.nif__anchor_of, ref_substring))
 
 
-class NIFContext(NIFAnnotation):
-    nif_classes = (nif_ns.Context, )
+class NIFContext(NIFString):
+    rdf_classes = (nif_ns.Context, )
 
-    def __init__(self, uri_prefix, is_string, **kwargs):
+    def __init__(self,
+                 uri: str,
+                 is_string: str,
+                 predLang: str = None,
+                 **kwargs):
         """
         :param is_string: see http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core/nif-core.html#d4e669
         """
         begin_end_index = (0, len(is_string))
+        self.uri =  rdflib.URIRef(uri)
         super().__init__(
             begin_end_index=begin_end_index,
-            uri_prefix=uri_prefix,
+            reference_context=self,
             **kwargs
         )
         self.__setattr__('nif__is_string', is_string, False)
+        self.__setattr__('nif__pred_lang', predLang, False)
 
-    def validate(self):
-        if self.nif__is_string is not None:
-            if not isinstance(self.nif__is_string, str):
-                raise TypeError('is_string value {} should be '
-                                'a string'.format(self.nif__is_string))
-            if int(self.nif__begin_index) != 0 or \
-                    int(self.nif__end_index) != len(self.nif__is_string):
-                raise ValueError(
-                    'Begin and end indices are provided ({}), '
-                    'but do not fit the provided string (length = {})'
-                    '.'.format((self.nif__begin_index, self.nif__end_index),
-                               len(self.nif__is_string)))
+    # def validate(self):
+    #     if not isinstance(self.nif__is_string, str):
+    #         raise TypeError('is_string value {} should be '
+    #                         'a string'.format(self.nif__is_string))
+    #     if int(self.nif__begin_index) != 0 or \
+    #             int(self.nif__end_index) != len(self.nif__is_string):
+    #         raise ValueError(
+    #             'Begin and end indices are provided ({}), '
+    #             'but do not fit the provided string (length = {})'
+    #             '.'.format((self.nif__begin_index, self.nif__end_index),
+    #                        len(self.nif__is_string)))
 
     @staticmethod
     def is_context(cxt):
@@ -260,102 +361,24 @@ class NIFContext(NIFAnnotation):
 
         if is_string is None:
             raise NIFError(f'For a context no nif:is_string predicate was found.')
-        out = cls(uri_prefix=context_uri, is_string=is_string)
+        out = cls(uri=context_uri, is_string=is_string)
         out += other_triples
         return out
 
 
-# class NIFOffsetBasedString(NIFString):
-#     nif_classes = tuple()
-#
-#     def __init__(self,
-#                  begin_end_index,
-#                  uri_prefix,
-#                  uri_scheme=nif_ns.OffsetBasedString,
-#                  **kwargs):
-#         """
-#         The base abstract class.
-#
-#         :param begin_end_index: tuple (begin_index, end_index). If `None` then
-#             begin_index = 0. see http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core/nif-core.html#d4e436
-#         :param uri_prefix: the prefix of the resulting URI. For example,
-#             `http://example.doc` would produce a URI of the form
-#             `http://example.doc#char=0,100`.
-#         :param **kwargs: any additional (predicate, object) pairs
-#         """
-#         assert uri_scheme in [nif_ns.ContextHashBasedString,
-#                               nif_ns.RFC5147String, nif_ns.CStringInst,
-#                               nif_ns.OffsetBasedString]
-#         self.nif_classes = list(self.nif_classes)
-#         self.nif_classes.append(uri_scheme)
-#         self.nif_classes = tuple(self.nif_classes)
-#         self.uri = do_suffix_offset(uri_prefix, *begin_end_index)
-#         super().__init__(begin_end_index, **kwargs)
-
-class NIFString(NIFAnnotation):
-    nif_classes = (nif_ns.String, )
-
-    def __init__(self,
-                 begin_end_index,
-                 reference_context,
-                 anchor_of=None,
-                 **kwargs):
-        assert reference_context is not None
-        uri_prefix = reference_context.uri
-        self.reference_context = reference_context
-        super().__init__(begin_end_index=begin_end_index,
-                         uri_prefix=uri_prefix,
-                         **kwargs)
-        self.__setattr__('nif__reference_context', reference_context.uri,
-                         validate=False)
-        if anchor_of is not None:
-            self.__setattr__('nif__anchor_of', anchor_of, validate=False)
-        self.validate()
-
-    def validate(self):
-        if self.reference_context is not None:
-            if not NIFContext.is_context(self.reference_context):
-                raise ValueError(
-                    'The provided reference context is not compatible with '
-                    'nif.Context class.')
-        if self.nif__anchor_of is not None:
-            ref_substring = self.reference_context.nif__is_string[
-                            int(self.nif__begin_index):int(self.nif__end_index)]
-            # Extractor returns different capitalization in matches!
-            if self.nif__anchor_of.toPython().lower() != ref_substring.lower():
-                raise ValueError(
-                    'Anchor should be equal exactly to the subtring of '
-                    'the reference context. You have anchor = "{}", '
-                    'substring in ref context = "{}"'.format(
-                        self.nif__anchor_of, ref_substring))
-
-
 class NIFStructure(NIFString):
-    nif_classes = tuple()
+    rdf_classes = (nif_ns.Structure,)
 
     def __init__(self,
                  begin_end_index,
                  reference_context,
                  anchor_of=None,
-                 annotation_units: List[NIFAnnotationUnit] = None,
                  **kwargs):
         super().__init__(
             begin_end_index=begin_end_index,
             reference_context=reference_context,
             anchor_of=anchor_of,
             **kwargs)
-        self.annotation_units = dict()
-        if annotation_units is not None:
-            for au in annotation_units:
-                self.add_annotation_unit(au)
-
-    def add_annotation_unit(self, au: NIFAnnotationUnit):
-        self.addattr('nif__annotation_unit', au.uri)
-        self.annotation_units[au.uri] = au
-
-    def remove_annotation_unit(self, au_uri: str):
-        self.delattr('nif__annotation_unit', au_uri)
-        del self.annotation_units[au_uri]
 
     @classmethod
     def from_triples(cls, rdf_graph, ref_cxt):
@@ -386,128 +409,167 @@ class NIFStructure(NIFString):
 
 
 class NIFSentence(NIFStructure):
-    nif_classes = (nif_ns.Sentence,)
+    rdf_classes = (nif_ns.Sentence,)
 
     def __init__(self,
                  begin_end_index,
                  reference_context,
                  anchor_of=None,
-                 annotation_units: List[NIFAnnotationUnit] = None,
+                 next_sentence: 'NIFSentence' = None,
+                 previous_sentence: 'NIFSentence' = None,
+                 words: List['NIFWord'] = None,
                  **kwargs):
         super().__init__(
             begin_end_index=begin_end_index,
             reference_context=reference_context,
             anchor_of=anchor_of,
-            annotation_units=annotation_units,
             **kwargs)
+        self.previous_sentence = previous_sentence
+        self.next_sentence = next_sentence
+        self.words = words
 
     @property
     def next_sentence(self):
-        return self.nif__next_sentence
+        return self.next_sentence_
 
     @next_sentence.setter
     def next_sentence(self, next_sentence: 'NIFSentence'):
-        self.nif__next_sentence = next_sentence.uri
+        self.next_sentence_ = next_sentence
+        if next_sentence is not None:
+            self.nif__next_sentence = next_sentence.uri
 
     @property
     def previous_sentence(self):
-        return self.nif__next_sentence
+        return self.previous_sentence_
 
     @previous_sentence.setter
-    def previous_sentence(self, next_sentence: 'NIFSentence'):
-        self.nif__next_sentence = next_sentence.uri
+    def previous_sentence(self, previous_sentence: 'NIFSentence'):
+        self.previous_sentence_ = previous_sentence
+        if previous_sentence is not None:
+            self.nif__previous_sentence = previous_sentence.uri
 
     @property
     def words(self):
-        return self.nif_word
+        return self.words_
 
     @words.setter
-    def words(self, nif_words: List['NIFWord']):
-        for word in nif_words:
-            self.addattr('nif__word', word.uri)
+    def words(self, words: List['NIFWord']):
+        words_ = words or []
+        self.words_ = words_
+        self.nif__word = [w.uri for w in words_]
 
 
 class NIFWord(NIFStructure):
-    nif_classes = (nif_ns.Word, )
+    rdf_classes = (nif_ns.Word, )
 
     def __init__(self,
                  begin_end_index,
                  reference_context,
                  anchor_of=None,
                  pos_tag: str = None,
-                 annotation_units: List[NIFAnnotationUnit] = None,
+                 next_word: 'NIFWord' = None,
+                 previous_word: 'NIFWord' = None,
+                 sentence: NIFSentence = None,
                  **kwargs):
         super().__init__(
             begin_end_index=begin_end_index,
             reference_context=reference_context,
             anchor_of=anchor_of,
-            annotation_units=annotation_units,
             **kwargs)
         self.nif__pos_tag = pos_tag
+        self.sentence = sentence
+        self.next_word = next_word
+        self.previous_word = previous_word
 
     @property
     def next_word(self):
-        return self.nif__next_word
+        return self.next_word_
 
     @next_word.setter
     def next_word(self, next_word: 'NIFWord'):
-        self.nif__next_word = next_word.uri
+        self.next_word_ = next_word
+        if next_word is not None:
+            self.nif__next_word = next_word.uri
 
     @property
     def previous_word(self):
-        return self.nif__next_word
+        return self.previous_word_
 
     @previous_word.setter
-    def previous_word(self, next_word: 'NIFWord'):
-        self.nif__next_word = next_word.uri
+    def previous_word(self, previous_word: 'NIFWord'):
+        self.previous_word_ = previous_word
+        if previous_word is not None:
+            self.nif__previous_word = previous_word.uri
 
     @property
     def sentence(self):
-        return self.nif_word
+        return self.sentence_
 
     @sentence.setter
-    def sentence(self, nif_sentence: NIFSentence):
-        self.nif__sentence = nif_sentence.uri
+    def sentence(self, sentence: NIFSentence):
+        self.sentence_ = sentence
+        if sentence is not None:
+            self.nif__sentence = sentence.uri
 
 
-class NIFChunk(NIFStructure):
-    nif_classes = (swcres_ns.Chunk, )
+class NIFPhrase(NIFStructure):
+    rdf_classes = (nif_ns.Phrase, )
 
     def __init__(self,
                  begin_end_index,
                  reference_context,
-                 anchor_of=None,
-                 chunk_type: str = None,
-                 annotation_units: List[NIFAnnotationUnit] = None,
+                 anchor_of: str = None,
+                 sentence: NIFSentence = None,
+                 words: List['NIFWord'] = None,
                  **kwargs):
         super().__init__(
             begin_end_index=begin_end_index,
             reference_context=reference_context,
             anchor_of=anchor_of,
-            annotation_units=annotation_units,
             **kwargs)
-        self.swcres__chunk_type = chunk_type
+        self.sentence = sentence
+        self.words = words
 
     @property
     def words(self):
-        return self.nif_word
+        return self.words_
 
     @words.setter
-    def words(self, nif_words: List['NIFWord']):
-        for word in nif_words:
-            self.addattr('nif__word', word.uri)
+    def words(self, words: List['NIFWord']):
+        words_ = words or []
+        self.words_ = words_
+        self.swcnif__word = [w.uri for w in words_]
 
     @property
     def sentence(self):
-        return self.nif_word
+        return self.sentence_
 
     @sentence.setter
-    def sentence(self, nif_sentence: NIFSentence):
-        self.nif__sentence = nif_sentence.uri
+    def sentence(self, sentence: NIFSentence):
+        self.sentence_ = sentence
+        if sentence is not None:
+            self.swcnif__sentence = sentence.uri
 
 
-class NIFNamedEntity(NIFStructure):
-    nif_classes = (swcres_ns.NamedEntity, )
+class SWCNIFChunk(NIFPhrase):
+    rdf_classes = (swcnif_ns.Chunk,)
+
+    def __init__(self,
+                 begin_end_index,
+                 reference_context,
+                 chunk_type: str,
+                 anchor_of=None,
+                 **kwargs):
+        super().__init__(
+            begin_end_index=begin_end_index,
+            reference_context=reference_context,
+            anchor_of=anchor_of,
+            **kwargs)
+        self.swcnif__chunk_type = chunk_type
+
+
+class SWCNIFNamedEntityOccurrence(NIFPhrase):
+    rdf_classes = (swcnif_ns.NamedEntity,)
 
     def __init__(self,
                  begin_end_index,
@@ -517,35 +579,22 @@ class NIFNamedEntity(NIFStructure):
                  annotator_uri: str = None,
                  anchor_of=None,
                  **kwargs):
-        au = NIFAnnotationUnit(itsrdf__ta_class_ref=rdflib.URIRef(class_uri),
+        if annotator_uri is not None:
+            annotator_uri = rdflib.URIRef(annotator_uri)
+        if class_uri is not None:
+            class_uri = rdflib.URIRef(class_uri)
+        au = NIFAnnotationUnit(itsrdf__ta_class_ref=class_uri,
                                itsrdf__ta_confidence=confidence,
-                               itsrdf__ta_annotator_ref=rdflib.URIRef(annotator_uri))
+                               itsrdf__ta_annotator_ref=annotator_uri)
         super().__init__(
             reference_context=reference_context,
             begin_end_index=begin_end_index, anchor_of=anchor_of,
-            annotation_units=[au],
             **kwargs)
-
-    @property
-    def words(self):
-        return self.nif_word
-
-    @words.setter
-    def words(self, nif_words: List['NIFWord']):
-        for word in nif_words:
-            self.addattr('nif__word', word.uri)
-
-    @property
-    def sentence(self):
-        return self.nif_word
-
-    @sentence.setter
-    def sentence(self, nif_sentence: NIFSentence):
-        self.nif__sentence = nif_sentence.uri
+        self.annotation_units = [au]
 
 
-class NIFExtractedEntity(NIFStructure):
-    nif_classes = (swcres_ns.ExtractedEntity, )
+class SWCNIFMatchedResourceOccurence(NIFPhrase):
+    rdf_classes = (swcnif_ns.ExtractedEntity,)
 
     def __init__(self,
                  begin_end_index,
@@ -555,31 +604,18 @@ class NIFExtractedEntity(NIFStructure):
                  annotator_uri: str = None,
                  anchor_of=None,
                  **kwargs):
-        au = NIFAnnotationUnit(itsrdf__ta_ident_ref=rdflib.URIRef(entity_uri),
+        if annotator_uri is not None:
+            annotator_uri = rdflib.URIRef(annotator_uri)
+        if entity_uri is not None:
+            entity_uri = rdflib.URIRef(entity_uri)
+        au = NIFAnnotationUnit(itsrdf__ta_ident_ref=entity_uri,
                                itsrdf__ta_confidence=confidence,
-                               itsrdf__ta_annotator_ref=rdflib.URIRef(annotator_uri))
+                               itsrdf__ta_annotators_ref=annotator_uri)
         super().__init__(
             reference_context=reference_context,
             begin_end_index=begin_end_index, anchor_of=anchor_of,
-            annotation_units=[au],
             **kwargs)
-
-    @property
-    def words(self):
-        return self.nif_word
-
-    @words.setter
-    def words(self, nif_words: List['NIFWord']):
-        for word in nif_words:
-            self.addattr('nif__word', word.uri)
-
-    @property
-    def sentence(self):
-        return self.nif_word
-
-    @sentence.setter
-    def sentence(self, nif_sentence: NIFSentence):
-        self.nif__sentence = nif_sentence.uri
+        self.annotation_units = [au]
 
 
 class NIFDocument:
@@ -607,7 +643,7 @@ class NIFDocument:
 
     @classmethod
     def from_text(cls, text, uri="http://example.doc/" + str(uuid.uuid4())):
-        cxt = NIFContext(is_string=text, uri_prefix=uri)
+        cxt = NIFContext(is_string=text, uri=uri)
         return cls(context=cxt, annotations=[])
 
     def add_annotations(self, anns: List[NIFAnnotation]):
@@ -626,7 +662,10 @@ class NIFDocument:
     def add_extracted_entities(self, ees):
         self.add_annotations(ees)
 
-    def add_extracted_cpts(self, cpt_dicts, au_kwargs=None, **kwargs):
+    def add_extracted_cpts(self, cpt_dicts,
+                           confidence=1,
+                           annotator_uri=ns_dict['lkg']['EL'],
+                           **kwargs):
         """
         :param cpt_dict: expected to have 'uri',
             'matchings'-> [{'text': value,
@@ -640,12 +679,13 @@ class NIFDocument:
             for matches in cpt_dict['matchings']:
                 for match in matches['positions']:
                     surface_form = self.context.nif__is_string[match[0]:match[1]]
-                    ee = NIFExtractedEntity(
+                    ee = SWCNIFMatchedResourceOccurence(
                         reference_context=self.context,
                         begin_end_index=(match[0], match[1]),
                         anchor_of=surface_form,
                         entity_uri=cpt_uri,
-                        au_kwargs=au_kwargs,
+                        annotator_uri=annotator_uri,
+                        confidence=confidence,
                         **kwargs
                     )
                     ees.append(ee)
@@ -658,7 +698,7 @@ class NIFDocument:
         _rdf = self.context
         for ann in self.annotations:
             _rdf += ann
-            for au in ann.annotation_units.values():
+            for au in ann.annotation_units:
                 _rdf += au
         # self._rdf = _rdf
         return _rdf
