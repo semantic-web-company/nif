@@ -5,37 +5,54 @@ A package to help using [NIF](https://github.com/NLP2RDF/ontologies/blob/master/
 
 ## Example
 
-Read `json-ld` and serialize as turtle.
+### Create a `NIFDocument`.
+
+```python
+from nif.annotation import NIFDocument, SWCNIFNamedEntityOccurrence, SWCNIFChunk
+
+cxt_str = "Christian mentioned tiger shark hunting"
+i = 0
+words_data = []
+for w_str in cxt_str.split(' '):
+    be = (i, i+len(w_str))
+    words_data.append(be)
+    i += len(w_str) + 1
+sents_data = [(0, len(words_data)-1)]
+nif_doc = NIFDocument.from_data(cxt_str=cxt_str,
+                                words_data=words_data,
+                                sents_data=sents_data)
+# Named Entity
+christian = SWCNIFNamedEntityOccurrence(
+    begin_end_index=(0, 9),
+    anchor_of='Christian',
+    reference_context=nif_doc.context,
+    class_uri="http://dbpedia.org/resource/classes#Person"
+)
+nif_doc.phrases += christian
+# Noun Phrase
+np = SWCNIFChunk(
+    begin_end_index=(20, 39),
+    reference_context=nif_doc.context,
+    chunk_type='NP',
+    anchor_of='tiger shark hunting',
+)
+nif_doc.phrases += np
+```
+
+### Create from triples.
 
 ```python
 from pathlib import Path
+from nif.annotation import NIFDocument, SWCNIFNamedEntityOccurrence, SWCNIFChunk
 
-from nif.annotation import NIFDocument
-
-def read_and_print(file_path: Path):
-    with file_path.open() as f:
-        s = f.read()
-    print(s)
-    d = NIFDocument.parse_rdf(s,format='json-ld')
-    result = d.serialize(format="ttl").decode()
-    print(result)
-
-
-if __name__ == '__main__':
-    doc_path = Path('<PATH TO YOUR JSON-LD FILE HERE>')
-    read_and_print(doc_path)
+file_path = Path('./nif/example/words.ttl')
+nif_doc = NIFDocument.parse_rdf(file_path.read_text())
 ```
 
-### Tests
+## Tests
 
 To run tests do:
 ``` bash
 > cd nif
 > nosetests tests/
 ```
-
-## TODOs
-
-- Add examples of usage
-- Add install instructions (`pip install -e <github.com:semantic-web-company/nif.git>`)
-- Make nif__anchor_of optional for NIFAnnotation 

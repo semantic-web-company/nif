@@ -181,7 +181,7 @@ class TestExtractedEntity:
             uri="http://some.doc/" + str(uuid.uuid4())
         )
         ex_uri = 'http://example.com/index#some'
-        ee = SWCNIFMatchedResourceOccurence(
+        ee = SWCNIFMatchedResourceOccurrence(
             reference_context=self.cxt,
             begin_end_index=(0, 4),
             anchor_of='some',
@@ -196,7 +196,7 @@ class TestExtractedEntity:
             uri="http://some.doc/" + str(uuid.uuid4())
         )
         ex_uri = 'http://example.com/index#some'
-        ee = SWCNIFMatchedResourceOccurence(
+        ee = SWCNIFMatchedResourceOccurrence(
             reference_context=self.cxt,
             begin_end_index=(0, 4),
             anchor_of='some',
@@ -215,7 +215,7 @@ class TestExtractedEntity:
             confidence=1,
             annotator_uri=ns_dict['lkg']['EL'],
             rdf__type=ns_dict['lkg']['LynxAnnotation'])
-        au = nif_doc.annotations[0].annotation_units[0]
+        au = nif_doc.phrases[0].annotation_units[0]
         # check itsrdf:taAnnotatorsRef is present
         annotators = list(au[:ns_dict['itsrdf']['taAnnotatorsRef']:])
         print(annotators)
@@ -234,27 +234,23 @@ class TestDocument:
             is_string=self.txt[:-1],
             uri="http://some.doc/" + str(uuid.uuid4()))
         ex_uri = 'http://example.com/index#some'
-        self.ee = SWCNIFMatchedResourceOccurence(
+        self.ee = SWCNIFMatchedResourceOccurrence(
             reference_context=self.cxt,
             begin_end_index=(0, 4),
             anchor_of='some',
             entity_uri=ex_uri)
-        self.ee2 = SWCNIFMatchedResourceOccurence(
+        self.ee2 = SWCNIFMatchedResourceOccurrence(
             reference_context=self.cxt2,
             begin_end_index=(0, 4),
             anchor_of='some',
             entity_uri=ex_uri)
 
     def test_create_doc(self):
-        d = NIFDocument(context=self.cxt, annotations=[])
+        d = NIFDocument(context=self.cxt)
         assert d.context == self.cxt
 
-    def test_create_with_struct(self):
-        d = NIFDocument(context=self.cxt, annotations=[self.ee])
-        assert d.annotations == [self.ee]
-
     def test_create_from_ttl(self):
-        d = NIFDocument(context=self.cxt, annotations=[self.ee])
+        d = NIFDocument(context=self.cxt, phrases=[self.ee])
         ttl_text = d.serialize("ttl").decode("utf-8")
         d2 = NIFDocument.parse_rdf(ttl_text)
         parsed_triples = set(d2.rdf)
@@ -263,27 +259,21 @@ class TestDocument:
         for s,p,o in d.rdf:
             if not isinstance(s, rdflib.BNode) and not isinstance(o, rdflib.BNode):
                 assert (s,p,o) in parsed_triples, (s,p,o)
-        assert d.annotations == [self.ee]
+        assert d.phrases == [self.ee]
 
     def test_not_create_with_wrong_ref_cxt(self):
         with nose.tools.assert_raises(ValueError):
-            NIFDocument(context=self.cxt, annotations=[self.ee2])
+            NIFDocument(context=self.cxt, phrases=[self.ee2])
 
     def test_create_from_text(self):
         d = NIFDocument.from_text(self.txt, self.uri_prefix)
         assert d.context.uri.startswith(self.uri_prefix), (d.uri_prefix,
                                                            self.uri_prefix)
-        assert d.uri_prefix.startswith(self.uri_prefix), (d.uri_prefix, self.uri_prefix)
         assert d.context.uri.startswith(self.uri_prefix)
 
     def test_add_struct(self):
-        d = NIFDocument(context=self.cxt, annotations=[])
-        d.add_extracted_entities([self.ee])
-
-    def test_not_add_invalid_struct(self):
-        d = NIFDocument(context=self.cxt, annotations=[])
-        with nose.tools.assert_raises(ValueError):
-            d.add_extracted_entities([self.ee2])
+        d = NIFDocument(context=self.cxt)
+        d.phrases += [self.ee]
 
     def test_add_cpt(self):
         cpt = {
@@ -293,8 +283,39 @@ class TestDocument:
                 {'text': 'this', 'positions': [(21, 25), (41, 45)]}
             ]
         }
-        d = NIFDocument(context=self.cxt, annotations=[])
+        d = NIFDocument(context=self.cxt)
         d.add_extracted_cpts([cpt])
+
+    def test_document_with_words_phrases_sents(self):
+        cxt_str = "Christian mentioned tiger shark hunting"
+        i = 0
+        words_data = []
+        for w_str in cxt_str.split(' '):
+            be = (i, i+len(w_str))
+            words_data.append(be)
+            i += len(w_str) + 1
+        sents_data = [(0, len(words_data)-1)]
+        nif_doc = NIFDocument.from_data(cxt_str=cxt_str,
+                                        words_data=words_data,
+                                        sents_data=sents_data)
+        # Named Entity
+        christian = SWCNIFNamedEntityOccurrence(
+            begin_end_index=(0, 9),
+            anchor_of='Christian',
+            reference_context=nif_doc.context,
+            class_uri="http://dbpedia.org/resource/classes#Person"
+        )
+        nif_doc.phrases += christian
+        # Noun Phrase
+        np = SWCNIFChunk(
+            begin_end_index=(20, 39),
+            reference_context=nif_doc.context,
+            chunk_type='NP',
+            anchor_of='tiger shark hunting',
+        )
+        nif_doc.phrases += np
+        assert nif_doc
+
 
 
 class TestSuffix:
@@ -323,10 +344,10 @@ class TestSentenceWord:
         sent2 = NIFSentence(begin_end_index=(len(self.sents[0]), len(self.sents[0]) + len(self.sents[1])),
                             reference_context=self.cxt,
                             anchor_of=self.sents[1],
-                            previous_sentence=sent1)
+                            previous_sentence_uri=sent1.uri)
         sent1.nif__next_sentence = sent2.uri
         assert sent1.nif__next_sentence == sent2.uri
-        assert sent2.nif__previous_sentence == sent1.uri
+        assert sent2.nif__previous_sentence == sent1.uri, (sent2.nif__previous_sentence, sent1.uri)
 
     def test_sentence_words(self):
         sent1 = NIFSentence(begin_end_index=(0, len(self.sents[0])),
@@ -358,7 +379,7 @@ class TestSentenceWord:
         sent1 = NIFSentence(begin_end_index=(0, len(self.sents[0])),
                             reference_context=self.cxt,
                             anchor_of=self.sents[0],
-                            words=nif_words)
+                            word_uris=[w.uri for w in nif_words])
         assert len(sent1.nif__word) == len(self.words1)
 
     def test_next_previous_words(self):

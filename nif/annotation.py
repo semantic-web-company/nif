@@ -47,7 +47,7 @@ def apply_uri_scheme(nif_resource,
         nif_classes = list(nif_resource.rdf_classes)
         nif_classes.append(uri_scheme)
         nif_resource.rdf_classes = tuple(nif_classes)
-        nif_resource.uri = do_suffix_offset(uri_prefix, *begin_end_index)
+        return do_suffix_offset(uri_prefix, *begin_end_index)
     else:
         raise NotImplementedError(f'The URI scheme {uri_scheme} is not implemented yet.')
 
@@ -195,13 +195,22 @@ class NIFAnnotationUnit(NIFAnnotation):
         """
         super(NIFAnnotationUnit, self).__init__(uri=uri, **kwargs)
 
+    @classmethod
+    def from_triples(cls, rdf_graph, ref_string_uri):
+        au_uris = list(rdf_graph[ref_string_uri:nif_ns.annotationUnit:])
+        aus = []
+        for au_uri in au_uris:
+            au_dict = {p_uri: o_uri for p_uri, o_uri in rdf_graph[au_uri::]}
+            au = cls(uri=au_uri, **au_dict)
+            aus.append(au)
+        return aus
+
 
 class NIFString(NIFGetSetMixin):
     rdf_classes = (nif_ns.String, )
 
     def __init__(self,
                  begin_end_index,
-                 # uri_prefix,
                  reference_context,
                  uri_scheme=nif_ns.OffsetBasedString,
                  annotation_units: List[NIFAnnotationUnit] = None,
@@ -228,19 +237,9 @@ class NIFString(NIFGetSetMixin):
         # uri_prefix = rdflib.URIRef(uri_prefix) or rdflib.BNode()
         if not isinstance(self, NIFContext):
             uri_prefix = reference_context.uri
-            apply_uri_scheme(self, uri_prefix, uri_scheme, begin_end_index)
+            self.uri = apply_uri_scheme(self, uri_prefix, uri_scheme, begin_end_index)
             self.__setattr__('nif__reference_context', reference_context.uri,
                              validate=False)
-        # assert uri_scheme in [nif_ns.ContextHashBasedString,
-        #                       nif_ns.RFC5147String, nif_ns.CStringInst,
-        #                       nif_ns.OffsetBasedString]
-        # if uri_scheme == nif_ns.OffsetBasedString:
-        #     nif_classes = list(self.rdf_classes)
-        #     nif_classes.append(uri_scheme)
-        #     self.rdf_classes = tuple(nif_classes)
-        #     self.uri = do_suffix_offset(uri_prefix, *begin_end_index)
-        # else:
-        #     raise NotImplementedError(f'The URI scheme {uri_scheme} is not implemented yet.')
 
         for key, val in kwargs.items():
             self.__setattr__(key, val)
@@ -271,23 +270,6 @@ class NIFString(NIFGetSetMixin):
             self.nif__annotation_unit = [au.uri for au in aus]
         self.annotation_units_ = aus_
 
-    # def __init__(self,
-    #              begin_end_index,
-    #              reference_context,
-    #              anchor_of=None,
-    #              **kwargs):
-    #     assert reference_context is not None
-    #     uri_prefix = reference_context.uri
-    #     self.reference_context = reference_context
-    #     super().__init__(begin_end_index=begin_end_index,
-    #                      uri_prefix=uri_prefix,
-    #                      **kwargs)
-    #     self.__setattr__('nif__reference_context', reference_context.uri,
-    #                      validate=False)
-    #     if anchor_of is not None:
-    #         self.__setattr__('nif__anchor_of', anchor_of, validate=False)
-    #     self.validate()
-
     def validate(self):
         if self.reference_context is not None:
             if not NIFContext.is_context(self.reference_context):
@@ -299,6 +281,8 @@ class NIFString(NIFGetSetMixin):
                             int(self.nif__begin_index):int(self.nif__end_index)]
             # Extractor returns different capitalization in matches!
             if self.nif__anchor_of.toPython().lower() != ref_substring.lower():
+                print(self.reference_context.nif__is_string, int(self.nif__begin_index),
+                      int(self.nif__end_index))
                 raise ValueError(
                     'Anchor should be equal exactly to the subtring of '
                     'the reference context. You have anchor = "{}", '
@@ -318,7 +302,7 @@ class NIFContext(NIFString):
         :param is_string: see http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core/nif-core.html#d4e669
         """
         begin_end_index = (0, len(is_string))
-        self.uri =  rdflib.URIRef(uri)
+        self.uri = rdflib.URIRef(uri)
         super().__init__(
             begin_end_index=begin_end_index,
             reference_context=self,
@@ -380,13 +364,94 @@ class NIFStructure(NIFString):
             anchor_of=anchor_of,
             **kwargs)
 
+    # @classmethod
+    # def from_triples(cls, rdf_graph, ref_cxt):
+    #     begin_index = None
+    #     end_index = None
+    #     anchor_of = None
+    #     other_triples = rdflib.Graph()
+    #     for s, p, o in rdf_graph:
+    #         if p == nif_ns.beginIndex:
+    #             begin_index = int(o.toPython())
+    #         elif p == nif_ns.endIndex:
+    #             end_index = int(o.toPython())
+    #         elif p == nif_ns.referenceContext:
+    #             ref_cxt_uriref = o
+    #             assert ref_cxt_uriref == ref_cxt.uri, \
+    #                 (ref_cxt_uriref, ref_cxt.uri)
+    #         elif p == nif_ns.anchorOf:
+    #             anchor_of = o.toPython()
+    #             # pass
+    #         else:
+    #             other_triples.add((s, p, o))
+    #     if begin_index is None or end_index is None:
+    #         raise NIFError(f'Begin or end index was not found for the structure {s}')
+    #     begin_end_index = begin_index, end_index
+    #     out = cls(reference_context=ref_cxt, begin_end_index=begin_end_index, anchor_of=anchor_of)
+    #     out += other_triples
+    #     return out
+
+
+class NIFSentence(NIFStructure):
+    rdf_classes = (nif_ns.Sentence,)
+
+    def __init__(self,
+                 begin_end_index,
+                 reference_context,
+                 anchor_of=None,
+                 next_sentence_uri: rdflib.URIRef = None,
+                 previous_sentence_uri: rdflib.URIRef = None,
+                 word_uris: List[rdflib.URIRef] = None,
+                 **kwargs):
+        super().__init__(
+            begin_end_index=begin_end_index,
+            reference_context=reference_context,
+            anchor_of=anchor_of,
+            **kwargs)
+        self.nif__previous_sentence = previous_sentence_uri
+        self.nif__next_sentence = next_sentence_uri
+        self.nif__word = word_uris
+
+    # @property
+    # def next_sentence(self):
+    #     return self.next_sentence_
+    #
+    # @next_sentence.setter
+    # def next_sentence(self, next_sentence: 'NIFSentence'):
+    #     self.next_sentence_ = next_sentence
+    #     if next_sentence is not None:
+    #         self.nif__next_sentence = next_sentence.uri
+    #
+    # @property
+    # def previous_sentence(self):
+    #     return self.previous_sentence_
+    #
+    # @previous_sentence.setter
+    # def previous_sentence(self, previous_sentence: 'NIFSentence'):
+    #     self.previous_sentence_ = previous_sentence
+    #     if previous_sentence is not None:
+    #         self.nif__previous_sentence = previous_sentence.uri
+    #
+    # @property
+    # def words(self):
+    #     return self.words_
+    #
+    # @words.setter
+    # def words(self, words: List['NIFWord']):
+    #     words_ = words or []
+    #     self.words_ = words_
+    #     self.nif__word = [w.uri for w in words_]
+
     @classmethod
-    def from_triples(cls, rdf_graph, ref_cxt):
+    def from_triples(cls, rdf_graph, ref_cxt, self_uri):
         begin_index = None
         end_index = None
         anchor_of = None
+        next_sentence_uri = None
+        previous_sentence_uri = None
+        word_uris = []
         other_triples = rdflib.Graph()
-        for s, p, o in rdf_graph:
+        for p, o in rdf_graph[self_uri::]:
             if p == nif_ns.beginIndex:
                 begin_index = int(o.toPython())
             elif p == nif_ns.endIndex:
@@ -397,66 +462,28 @@ class NIFStructure(NIFString):
                     (ref_cxt_uriref, ref_cxt.uri)
             elif p == nif_ns.anchorOf:
                 anchor_of = o.toPython()
-                # pass
+            elif p == nif_ns.nextSentence:
+                next_sentence_uri = o
+            elif p == nif_ns.previousSentence:
+                previous_sentence_uri = o
+            elif p == nif_ns.word:
+                word_uris.append(o)
             else:
-                other_triples.add((s, p, o))
+                other_triples.add((self_uri, p, o))
         if begin_index is None or end_index is None:
-            raise NIFError(f'Begin or end index was not found for the structure {s}')
+            raise NIFError(f'Begin or end index was not found for the sentence {self_uri}')
         begin_end_index = begin_index, end_index
-        out = cls(reference_context=ref_cxt, begin_end_index=begin_end_index, anchor_of=anchor_of)
+        out = cls(reference_context=ref_cxt,
+                  begin_end_index=begin_end_index,
+                  anchor_of=anchor_of,
+                  next_sentence_uri=next_sentence_uri,
+                  previous_sentence_uri=previous_sentence_uri,
+                  word_uris=word_uris
+                  )
         out += other_triples
+        aus = NIFAnnotationUnit.from_triples(rdf_graph=rdf_graph, ref_string_uri=out.uri)
+        out.annotation_units = aus
         return out
-
-
-class NIFSentence(NIFStructure):
-    rdf_classes = (nif_ns.Sentence,)
-
-    def __init__(self,
-                 begin_end_index,
-                 reference_context,
-                 anchor_of=None,
-                 next_sentence: 'NIFSentence' = None,
-                 previous_sentence: 'NIFSentence' = None,
-                 words: List['NIFWord'] = None,
-                 **kwargs):
-        super().__init__(
-            begin_end_index=begin_end_index,
-            reference_context=reference_context,
-            anchor_of=anchor_of,
-            **kwargs)
-        self.previous_sentence = previous_sentence
-        self.next_sentence = next_sentence
-        self.words = words
-
-    @property
-    def next_sentence(self):
-        return self.next_sentence_
-
-    @next_sentence.setter
-    def next_sentence(self, next_sentence: 'NIFSentence'):
-        self.next_sentence_ = next_sentence
-        if next_sentence is not None:
-            self.nif__next_sentence = next_sentence.uri
-
-    @property
-    def previous_sentence(self):
-        return self.previous_sentence_
-
-    @previous_sentence.setter
-    def previous_sentence(self, previous_sentence: 'NIFSentence'):
-        self.previous_sentence_ = previous_sentence
-        if previous_sentence is not None:
-            self.nif__previous_sentence = previous_sentence.uri
-
-    @property
-    def words(self):
-        return self.words_
-
-    @words.setter
-    def words(self, words: List['NIFWord']):
-        words_ = words or []
-        self.words_ = words_
-        self.nif__word = [w.uri for w in words_]
 
 
 class NIFWord(NIFStructure):
@@ -467,9 +494,9 @@ class NIFWord(NIFStructure):
                  reference_context,
                  anchor_of=None,
                  pos_tag: str = None,
-                 next_word: 'NIFWord' = None,
-                 previous_word: 'NIFWord' = None,
-                 sentence: NIFSentence = None,
+                 next_word_uri: rdflib.URIRef = None,
+                 previous_word_uri: rdflib.URIRef = None,
+                 sentence_uri: rdflib.URIRef = None,
                  **kwargs):
         super().__init__(
             begin_end_index=begin_end_index,
@@ -477,39 +504,83 @@ class NIFWord(NIFStructure):
             anchor_of=anchor_of,
             **kwargs)
         self.nif__pos_tag = pos_tag
-        self.sentence = sentence
-        self.next_word = next_word
-        self.previous_word = previous_word
+        self.nif__sentence = sentence_uri
+        self.nif__next_word = next_word_uri
+        self.nif__previous_word = previous_word_uri
 
-    @property
-    def next_word(self):
-        return self.next_word_
+    # @property
+    # def next_word_uri(self):
+    #     return self.nif__next_word
+    #
+    # @next_word_uri.setter
+    # def next_word_uri(self, next_word_uri: rdflib.URIRef):
+    #     self.nif__next_word = next_word_uri
+    #
+    # @property
+    # def previous_word(self):
+    #     return self.previous_word_
+    #
+    # @previous_word.setter
+    # def previous_word(self, previous_word: 'NIFWord'):
+    #     self.previous_word_ = previous_word
+    #     if previous_word is not None:
+    #         self.nif__previous_word = previous_word.uri
+    #
+    # @property
+    # def sentence(self):
+    #     return self.sentence_
+    #
+    # @sentence.setter
+    # def sentence(self, sentence: NIFSentence):
+    #     self.sentence_ = sentence
+    #     if sentence is not None:
+    #         self.nif__sentence = sentence.uri
 
-    @next_word.setter
-    def next_word(self, next_word: 'NIFWord'):
-        self.next_word_ = next_word
-        if next_word is not None:
-            self.nif__next_word = next_word.uri
-
-    @property
-    def previous_word(self):
-        return self.previous_word_
-
-    @previous_word.setter
-    def previous_word(self, previous_word: 'NIFWord'):
-        self.previous_word_ = previous_word
-        if previous_word is not None:
-            self.nif__previous_word = previous_word.uri
-
-    @property
-    def sentence(self):
-        return self.sentence_
-
-    @sentence.setter
-    def sentence(self, sentence: NIFSentence):
-        self.sentence_ = sentence
-        if sentence is not None:
-            self.nif__sentence = sentence.uri
+    @classmethod
+    def from_triples(cls, rdf_graph, ref_cxt, self_uri):
+        begin_index = None
+        end_index = None
+        anchor_of = None
+        next_word_uri = None
+        previous_word_uri = None
+        sentence_uri = None
+        pos_tag = None
+        other_triples = rdflib.Graph()
+        for p, o in rdf_graph[self_uri::]:
+            if p == nif_ns.beginIndex:
+                begin_index = int(o.toPython())
+            elif p == nif_ns.endIndex:
+                end_index = int(o.toPython())
+            elif p == nif_ns.referenceContext:
+                ref_cxt_uriref = o
+                assert ref_cxt_uriref == ref_cxt.uri, \
+                    (ref_cxt_uriref, ref_cxt.uri)
+            elif p == nif_ns.anchorOf:
+                anchor_of = o.toPython()
+            elif p == nif_ns.nextWord:
+                next_word_uri = o
+            elif p == nif_ns.previousWord:
+                previous_word_uri = o
+            elif p == nif_ns.sentence:
+                sentence_uri = o
+            elif p == nif_ns.posTag:
+                pos_tag = o.toPython()
+            else:
+                other_triples.add((self_uri, p, o))
+        if begin_index is None or end_index is None:
+            raise NIFError(f'Begin or end index was not found for the structure {self_uri}')
+        begin_end_index = begin_index, end_index
+        out = cls(reference_context=ref_cxt,
+                  begin_end_index=begin_end_index,
+                  anchor_of=anchor_of,
+                  next_word_uri=next_word_uri,
+                  previous_word_uri=previous_word_uri,
+                  sentence_uri=sentence_uri,
+                  pos_tag=pos_tag)
+        out += other_triples
+        aus = NIFAnnotationUnit.from_triples(rdf_graph=rdf_graph, ref_string_uri=out.uri)
+        out.annotation_units = aus
+        return out
 
 
 class NIFPhrase(NIFStructure):
@@ -519,36 +590,75 @@ class NIFPhrase(NIFStructure):
                  begin_end_index,
                  reference_context,
                  anchor_of: str = None,
-                 sentence: NIFSentence = None,
-                 words: List['NIFWord'] = None,
+                 sentence_uri: rdflib.URIRef = None,
+                 word_uris: List[rdflib.URIRef] = None,
                  **kwargs):
         super().__init__(
             begin_end_index=begin_end_index,
             reference_context=reference_context,
             anchor_of=anchor_of,
             **kwargs)
-        self.sentence = sentence
-        self.words = words
+        self.swcnif__sentence = sentence_uri
+        self.swcnif__word = word_uris
 
-    @property
-    def words(self):
-        return self.words_
+    # @property
+    # def words(self):
+    #     return self.words_
+    #
+    # @words.setter
+    # def words(self, words: List['NIFWord']):
+    #     words_ = words or []
+    #     self.words_ = words_
+    #     self.swcnif__word = [w.uri for w in words_]
+    #
+    # @property
+    # def sentence(self):
+    #     return self.sentence_
+    #
+    # @sentence.setter
+    # def sentence(self, sentence: NIFSentence):
+    #     self.sentence_ = sentence
+    #     if sentence is not None:
+    #         self.swcnif__sentence = sentence.uri
 
-    @words.setter
-    def words(self, words: List['NIFWord']):
-        words_ = words or []
-        self.words_ = words_
-        self.swcnif__word = [w.uri for w in words_]
-
-    @property
-    def sentence(self):
-        return self.sentence_
-
-    @sentence.setter
-    def sentence(self, sentence: NIFSentence):
-        self.sentence_ = sentence
-        if sentence is not None:
-            self.swcnif__sentence = sentence.uri
+    @classmethod
+    def from_triples(cls, rdf_graph, ref_cxt, self_uri):
+        begin_index = None
+        end_index = None
+        anchor_of = None
+        word_uris = []
+        sentence_uri = None
+        other_triples = rdflib.Graph()
+        for p, o in rdf_graph[self_uri::]:
+            if p == nif_ns.beginIndex:
+                begin_index = int(o.toPython())
+            elif p == nif_ns.endIndex:
+                end_index = int(o.toPython())
+            elif p == nif_ns.referenceContext:
+                ref_cxt_uriref = o
+                assert ref_cxt_uriref == ref_cxt.uri, \
+                    (ref_cxt_uriref, ref_cxt.uri)
+            elif p == nif_ns.anchorOf:
+                anchor_of = o.toPython()
+            elif p == swcnif_ns.word:
+                word_uris.append(o)
+            elif p == nif_ns.sentence:
+                sentence_uri = o
+            else:
+                other_triples.add((self_uri, p, o))
+        if begin_index is None or end_index is None:
+            raise NIFError(f'Begin or end index was not found for the phrase {self_uri}')
+        begin_end_index = begin_index, end_index
+        out = cls(reference_context=ref_cxt,
+                  begin_end_index=begin_end_index,
+                  anchor_of=anchor_of,
+                  word_uris=word_uris,
+                  sentence_uri=sentence_uri
+                  )
+        out += other_triples
+        aus = NIFAnnotationUnit.from_triples(rdf_graph=rdf_graph, ref_string_uri=out.uri)
+        out.annotation_units = aus
+        return out
 
 
 class SWCNIFChunk(NIFPhrase):
@@ -588,12 +698,13 @@ class SWCNIFNamedEntityOccurrence(NIFPhrase):
                                itsrdf__ta_annotator_ref=annotator_uri)
         super().__init__(
             reference_context=reference_context,
-            begin_end_index=begin_end_index, anchor_of=anchor_of,
+            begin_end_index=begin_end_index,
+            anchor_of=anchor_of,
             **kwargs)
         self.annotation_units = [au]
 
 
-class SWCNIFMatchedResourceOccurence(NIFPhrase):
+class SWCNIFMatchedResourceOccurrence(NIFPhrase):
     rdf_classes = (swcnif_ns.ExtractedEntity,)
 
     def __init__(self,
@@ -619,48 +730,170 @@ class SWCNIFMatchedResourceOccurence(NIFPhrase):
 
 
 class NIFDocument:
-    def __init__(self, context: NIFContext, annotations: List[NIFAnnotation] = None):
+    def __init__(self,
+                 context: NIFContext,
+                 words: List[NIFWord] = None,
+                 sentences: List[NIFSentence] = None,
+                 phrases: List[NIFPhrase] = None,
+                 ):
         if not NIFContext.is_context(context):
             raise TypeError('The provided context {} is not a NIFContext'
                             '.'.format(context))
         self.context = context
-        self.uri_prefix = str(context.uri)
-        self.annotations = []
-        if annotations is not None:
-            for ann in annotations:
-                self.add_annotations([ann])
+        self.words = words
+        self.sentences = sentences
+        self.phrases = phrases
         self.validate()
-        # self._rdf = None
+
+    @property
+    def words(self):
+        return self.words_
+
+    @words.setter
+    def words(self, words: List['NIFWord']):
+        words_ = words or []
+        self.words_ = words_
+
+    @property
+    def sentences(self):
+        return self.sentences_
+
+    @sentences.setter
+    def sentences(self, sentences: List['NIFSentence']):
+        sentences_ = sentences or []
+        self.sentences_ = sentences_
+
+    @property
+    def phrases(self):
+        return self.phrases_
+
+    @phrases.setter
+    def phrases(self, phrases: List['NIFPhrase']):
+        phrases_ = phrases or []
+        self.phrases_ = phrases_
 
     def validate(self):
-        for ann in self.annotations:
-            if ann.nif__reference_context != self.context.uri:
+        for nif_res in self.words + self.sentences + self.phrases:
+            if nif_res.reference_context.uri != self.context.uri:
                 raise ValueError('The reference context {} for the structure {}'
                                  ' is different from the context {} of the '
                                  'document.'.format(
-                                     ann.nif__reference_context,
-                                     ann.uri, self.context.uri))
+                                     nif_res.reference_context.uri,
+                                     nif_res.uri, self.context.uri))
+
+    @property
+    def rdf(self):
+        _rdf = self.context
+        for nif_res in self.words + self.sentences + self.phrases:
+            _rdf += nif_res
+            for au in nif_res.annotation_units:
+                _rdf += au
+        return _rdf
+
+    def serialize(self, format="xml", **kwargs):
+        rdf_text = self.rdf.serialize(format=format, **kwargs)
+        return rdf_text
+
+    @classmethod
+    def from_data(cls,
+                  cxt_str: str,
+                  words_data: List[Tuple[int, int]],
+                  sents_data: List[Tuple[int, int]],
+                  uri_prefix: str = None):
+        """
+        :param cxt_str: A string containing the context
+        :param words_data: list of start and end offsets of words in the context
+        :param sents_data: list of start and end words of each sentence
+        """
+        uri_prefix = rdflib.URIRef(uri_prefix) if uri_prefix is not None else rdflib.BNode()
+        ref_cxt = NIFContext(
+            uri=uri_prefix,
+            is_string=cxt_str
+        )
+        words = [
+            NIFWord(begin_end_index=be,
+                    reference_context=ref_cxt)
+            for be in words_data
+        ]
+        sents = []
+        for sent_data in sents_data:
+            word_start = words[sent_data[0]]
+            word_end = words[sent_data[1]]
+            word_uris = [word.uri for word in words[sent_data[0]:sent_data[1]]]
+            be = (word_start.nif__begin_index, word_end.nif__end_index)
+            sent = NIFSentence(begin_end_index=be,
+                               reference_context=ref_cxt,
+                               word_uris=word_uris)
+            sents.append(sent)
+            for word in words[sent_data[0]:sent_data[-1]]:
+                word.nif__sentence = sent.uri
+        for i, word in enumerate(words):
+            if i > 0:
+                prev_word_uri = words[i-1].uri
+                word.nif__previous_word = prev_word_uri
+            if i+1 < len(words):
+                next_word_uri = words[i+1].uri
+                word.nif__next_word = next_word_uri
+        out = cls(context=ref_cxt,
+                  words=words,
+                  sentences=sents)
+        return out
+
+
+    @classmethod
+    def parse_rdf(cls, rdf_text, format="n3", context_class=nif_ns.Context):
+        rdf_graph = rdflib.Graph()
+        rdf_graph.parse(data=rdf_text, format=format)
+
+        context_uri = rdf_graph.value(predicate=rdflib.RDF.type,
+                                      object=context_class)
+        if context_uri is None:
+            raise ValueError(f'Provided RDF: \n{rdf_graph[:]}\n does not contain a context of class {context_class}.')
+        context_triples = list(rdf_graph.triples((context_uri, None, None)))
+        for t in context_triples:
+            if isinstance(t[2], rdflib.BNode):
+                context_triples += list(rdf_graph.triples((t[2], None, None)))
+        context = NIFContext.from_triples(context_triples,
+                                          context_uri=context_uri)
+
+        struct_uris = set(rdf_graph[:nif_ns.referenceContext:context.uri])
+        uri2struct = dict()
+
+        words = []
+        word_uris = [u for u in struct_uris if rdf_graph[u:rdflib.RDF.type:nif_ns.Word]]
+        for word_uri in word_uris:
+            word = NIFWord.from_triples(rdf_graph=rdf_graph, ref_cxt=context, self_uri=word_uri)
+            words.append(word)
+            uri2struct[word.uri] = word
+
+        sentences = []
+        sent_uris = [u for u in struct_uris if rdf_graph[u:rdflib.RDF.type:nif_ns.Sentence]]
+        for word_uri in sent_uris:
+            sentence = NIFSentence.from_triples(rdf_graph=rdf_graph, ref_cxt=context, self_uri=word_uri)
+            sentences.append(sentence)
+            uri2struct[sentence.uri] = sentence
+
+        phrases = []
+        phrase_uris = [u for u in struct_uris if rdf_graph[u:rdflib.RDF.type:nif_ns.Phrase]]
+        for phrase_uri in phrase_uris:
+            phrase = NIFPhrase.from_triples(rdf_graph=rdf_graph, ref_cxt=context, self_uri=phrase_uri)
+            phrases.append(phrase)
+            uri2struct[phrase.uri] = phrase
+
+        out = cls(context=context,
+                  words=words,
+                  sentences=sentences,
+                  phrases=phrases)
+
+        for t in rdf_graph - out.rdf:
+            # if t not in out.rdf:
+            out.context.add(t)
+        return out
 
     @classmethod
     def from_text(cls, text, uri="http://example.doc/" + str(uuid.uuid4())):
         cxt = NIFContext(is_string=text, uri=uri)
-        return cls(context=cxt, annotations=[])
-
-    def add_annotations(self, anns: List[NIFAnnotation]):
-        for ann in anns:
-            self.annotations.append(ann)
-        try:
-            self.validate()
-        except (ValueError, TypeError) as e:
-            for _ in range(len(anns)):
-                self.annotations.pop()
-            raise e
-        # else:
-            # self.rdf += ann
-        return self
-
-    def add_extracted_entities(self, ees):
-        self.add_annotations(ees)
+        return cls(context=cxt)
 
     def add_extracted_cpts(self, cpt_dicts,
                            confidence=1,
@@ -679,7 +912,7 @@ class NIFDocument:
             for matches in cpt_dict['matchings']:
                 for match in matches['positions']:
                     surface_form = self.context.nif__is_string[match[0]:match[1]]
-                    ee = SWCNIFMatchedResourceOccurence(
+                    ee = SWCNIFMatchedResourceOccurrence(
                         reference_context=self.context,
                         begin_end_index=(match[0], match[1]),
                         anchor_of=surface_form,
@@ -689,63 +922,8 @@ class NIFDocument:
                         **kwargs
                     )
                     ees.append(ee)
-        self.add_extracted_entities(ees)
+        self.phrases += ees
         return self
-
-    @property
-    def rdf(self):
-        # if self._rdf is None:
-        _rdf = self.context
-        for ann in self.annotations:
-            _rdf += ann
-            for au in ann.annotation_units:
-                _rdf += au
-        # self._rdf = _rdf
-        return _rdf
-
-    def serialize(self, format="xml",
-                  # uri_format=nif_ns.OffsetBasedString
-                  **kwargs
-                  ):
-        rdf_text = self.rdf.serialize(format=format, **kwargs)
-        return rdf_text
-
-    @classmethod
-    def parse_rdf(cls, rdf_text, format="n3", context_class=nif_ns.Context):
-        rdf_graph = rdflib.Graph()
-        rdf_graph.parse(data=rdf_text, format=format)
-
-        context_uri = rdf_graph.value(predicate=rdflib.RDF.type,
-                                      object=context_class)
-        if context_uri is None:
-            raise ValueError(f'Provided RDF: \n{rdf_graph[:]}\n does not contain a context of class {context_class}.')
-        context_triples = list(rdf_graph.triples((context_uri, None, None)))
-        for t in context_triples:
-            if isinstance(t[2], rdflib.BNode):
-                context_triples += list(rdf_graph.triples((t[2], None, None)))
-        context = NIFContext.from_triples(context_triples,
-                                          context_uri=context_uri)
-
-        annotations = []
-        # struct_uris = list(rdf_graph[:nif_ns.referenceContext:context.uri])
-        struct_uris = (set(rdf_graph[:nif_ns.referenceContext:context.uri]) &
-                       set(rdf_graph[:rdflib.RDF.type:nif_ns.Annotation]))
-        for i, struct_uri in enumerate(struct_uris):
-            struct_triples = rdf_graph.triples((struct_uri, None, None))
-            struct = NIFStructure.from_triples(struct_triples, ref_cxt=context)
-            au_uris = list(rdf_graph[struct_uri:nif_ns.annotationUnit:])
-            for au_uri in au_uris:
-                au_dict = {p_uri: o_uri for p_uri, o_uri in rdf_graph[au_uri::]}
-                au = NIFAnnotationUnit(uri=au_uri, **au_dict)
-                struct.add_annotation_unit(au)
-            annotations.append(struct)
-        out = cls(context=context, annotations=annotations)
-
-        for t in rdf_graph - out.rdf:
-            # if t not in out.rdf:
-            out.context.add(t)
-
-        return out
 
     def __copy__(self):
         return NIFDocument.parse_rdf(self.serialize(format='n3'))
@@ -756,60 +934,6 @@ class NIFDocument:
 
 
 if __name__ == '__main__':
-    import rdflib
-
-    rdf_to_parse = '''
-{
-    "@context": "http://lynx-project.eu/doc/jsonld/lynxdocument.json",
-    "@id": "d39a661a-9a9f-45a9-b651-c7d62b314714",
-    "@type": [
-        "nif:Context",
-        "lkg:LynxDocument",
-        "lkg:CaseLaw"
-    ],
-    "metadata": {
-        "type_document": "Decision",
-        "language": "de",
-        "jurisdiction": "AT",
-        "title": {
-            "de": "Nichtigkeitsbeschwerde zur Wahrung des Gesetzes iSd § 23 StPO iZm vom Schöffengericht abweichende Verkündung des Urteils"
-        },
-        "hasAuthority": "OGH",
-        "id_local": "JJT_20160314_OGH0002_0150OS00182_15A0000_000",
-        "version_date": "2016-03-14",
-        "url_consolidated": "http://www.ris.bka.gv.at/JustizEntscheidung.wxe?Abfrage=Justiz&Dokumentnummer=JJT_20160314_OGH0002_0150OS00182_15A0000_000&IncludeSelf=True",
-        "sameAs": [
-            {
-                "@id": "https://lawthek.eu/detail/d39a661a-9a9f-45a9-b651-c7d62b314714/de/MULTI"
-            }
-        ]
-    },
-    "text": "Kopf Der Oberste Gerichtshof hat am 14. März 2016 durch den Senatspräsidenten des Obersten Gerichtshofs Prof. Dr. Danek als Vorsitzenden, den Hofrat des Obersten Gerichtshofs Mag. Lendl sowie die Hofrätinnen des Obersten Gerichtshofs Dr. Michel-Kwapinski, Mag. Fürnkranz und Dr. Mann als weitere Richter in Gegenwart der Rechtspraktikantin Mag. Fritsche als Schriftführerin in der Strafsache gegen Ersin C***** und andere Angeklagte wegen des Verbrechens des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 4 Z 3 SMG und weiterer strafbarer Handlungen, AZ 44 Hv 190/14b des Landesgerichts für Strafsachen Wien, über die Nichtigkeitsbeschwerde der Staatsanwaltschaft gegen das Urteil dieses Gerichts vom 25. September 2015 (ON 190) und die von der Generalprokuratur gegen einen Vorgang in diesem Verfahren erhobene Nichtigkeitsbeschwerde zur Wahrung des Gesetzes nach öffentlicher Verhandlung in Anwesenheit des Vertreters der Generalprokuratur, Generalanwalt Dr. Eisenmenger, des Angeklagten und seines Verteidigers Mag. Vural zu Recht erkannt: Spruch Im Verfahren AZ 44 Hv 190/14b des Landesgerichts für Strafsachen Wien verletzt der Vorgang, dass der Vorsitzende bei der Verkündung des Urteils am 25. September 2015 dem Schuldspruch A./I./ einen Reinheitsgehalt des urteilsgegenständlichen Suchtgifts Heroin von 15,59 % (§ 28a Abs 4 Z 3 SMG) zugrunde legte (§ 260 Abs 1 Z 1 StPO), obwohl nach dem Beschluss des Schöffensenats ein geringerer, (bloß) die Qualifikation des § 28a Abs 2 Z 3 SMG begründender Reinheitsgehalt angenommen worden war, § 268 erster Satz StPO. Dieses Urteil, das im Übrigen unberührt bleibt, wird in der Unterstellung des Schuldspruchs A./I./ auch unter Abs 2 Z 3 und Abs 3 zweiter Fall des § 28a SMG, demzufolge auch in dem den Angeklagten Ersin C***** betreffenden Strafausspruch (einschließlich der Vorhaftanrechnung) aufgehoben und es wird die Sache im Umfang der Aufhebung zu neuer Verhandlung und Entscheidung an das Landesgericht für Strafsachen Wien verwiesen. Die Staatsanwaltschaft wird mit ihrer Nichtigkeitsbeschwerde auf diese Entscheidung verwiesen. Text Gründe: Im Verfahren AZ 44 Hv 190/14b des Landesgerichts für Strafsachen Wien legte die Staatsanwaltschaft Wien mit Anklageschrift vom 21. Dezember 2014 (ON 138) Ersin C***** als Verbrechen des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 4 Z 3 SMG (A./I./) und Vergehen des unerlaubten Umgangs mit Suchtgiften nach § 27 Abs 1 Z 1 erster und zweiter Fall, Abs 2 SMG (D./) sowie Vladimir D***** (zu A.II./, B./) und Martin T***** (zu A.III./, B./) als Verbrechen des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 2 Z 2, Abs 4 Z 3 SMG und der Vorbereitung von Suchtgifthandel nach § 28 Abs 1 zweiter Fall, Abs 3 SMG, D***** überdies als Vergehen des unerlaubten Umgangs mit Suchtgiften nach § 27 Abs 1 Z 1 zweiter Fall SMG (C./) beurteiltes Verhalten zur Last. Zufolge des Anklagevorwurfs zu A./I./ hat Ersin C***** von Mitte August 2013 bis 13. Oktober 2014 in W***** in zahlreichen Angriffen Mustafa G***** und Liliane M***** vorschriftswidrig Suchtgift in einer das Fünfundzwanzigfache der Grenzmenge (§ 28b SMG) übersteigenden Menge überlassen, und zwar 1.300 Gramm Heroin in einer Reinsubstanz von zumindest 15,59 % (ON 138). In der Hauptverhandlung am 25. September 2015 wurde der „wesentliche Akteninhalt“ (vgl aber RIS-Justiz RS0110681), „insbesondere das Untersuchungsergebnis des Bundeskriminalamts“ betreffend das beim Zeugen Richard K***** sichergestellte Heroin, wonach das Suchtgift einen Reinheitsgehalt von 10,44 % aufwies, gemäß § 252 Abs 2a StPO einverständlich vorgetragen (ON 189 S 12). Nach dem Schluss der Verhandlung zog sich der Schöffensenat zur Urteilsberatung zurück. Nach dem Wiedererscheinen des Senats verkündete der Vorsitzende das Urteil, wonach - soweit hier von Interesse - Ersin C***** (zu A./I./) im Zeitraum Mitte August 2013 bis 23. Oktober 2014 in W***** in zahlreichen Angriffen Mustafa G***** und Liliane M***** vorschriftswidrig Suchtgift in einer das 15-fache der Grenzmenge (§ 28b SMG) übersteigenden Menge, und zwar 600 Gramm Heroin in einer Reinsubstanz von zumindest 15,59 %, durch gewinnbringenden Verkauf überlassen habe (ON 189 S 13; § 260 Abs 1 Z 1 StPO). Er habe hiedurch zu A./I./ das Verbrechen des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 2 Z 3 (gemeint auch: Abs 3 zweiter Fall) SMG begangen (§ 260 Abs 1 Z 2 StPO) und wurde hiefür zu einer (unbedingten) Freiheitsstrafe verurteilt (ON 189 S 15). Während der Angeklagte C***** - ebenso wie die beiden Mitangeklagten - Rechtsmittelverzicht erklärte, meldete die Staatsanwaltschaft (nur) zu diesem Angeklagten Nichtigkeitsbeschwerde an. In der schriftlichen Ausfertigung des Urteils (ON 190) stimmen Spruch und Gründe zu A./I./ (US 3 ff und 9) in den wesentlichen Punkten mit dem verkündeten Urteil überein. In der rechtlichen Beurteilung weist das Erstgericht darauf hin, dass auch beim Angeklagten Ersin C***** das 25-fache der Grenzmenge an Suchtgift überschritten und demnach die Privilegierung nach § 28a Abs 3 zweiter Fall SMG rechtsirrig angenommen worden sei (US 13 erster Absatz). In ihrer lediglich gegen den Schuldspruch A./I./ erhobenen, auf § 281 Abs 1 Z 10 StPO gestützten Nichtigkeitsbeschwerde (ON 205) führt die Anklagebehörde aus, dass bei der im Urteil festgestellten Suchtgiftmenge von 600 Gramm Heroin mit einem Reinheitsgehalt von 15,59 % die Grenzmenge um mehr als das 25-fache überschritten werde, sodass das inkriminierte Verbrechen richtigerweise nach § 28a Abs 4 Z 3 SMG zu qualifizieren und eine Privilegierung nach § 28a Abs 3 SMG daher ausgeschlossen sei. Am 6. November 2015 legte der Vorsitzende einen Amtsvermerk folgenden Inhalts an (bei ON 1): „Da das gegenständliche Urteil mündlich so verkündet wurde, wie nunmehr die schriftliche Urteilsausfertigung lautet, konnten keine Änderungen mehr vorgenommen werden - es blieb daher in allen Punkten beim ursprünglich angeklagten Reinheitsgrad von 15,59 %. In der Beratung mit den Schöffen ist natürlich von 'einem nicht mehr feststellbaren' Reinheitsgehalt ausgegangen worden. Alleine, wenn man die rund zehn Prozent (gemeint: Reinheitsgehalt) betrachtet, die beim Zeugen K***** sichergestellt wurden, kommt man bereits beim Faktum A./I./ bei 600 Gramm Suchtgift auf die 15-fache Menge. Zudem kommt, dass auch immer wieder die Rede von gestrecktem Suchtgift war, wenn dies auch einige Zeugen nicht bestätigten. Somit ergab sich für den Schöffensenat in der Beratung bloß die 15-fache Menge und zusätzlich auch die Privilegierung. In der mündlichen Urteilsverkündung wurde jedoch darauf vergessen, das Urteil konnte schriftlich nicht mehr anders ausgefertigt werden.“ Der Vorsitzende des aus einem Berufsrichter und zwei Schöffen zusammengesetzten Schöffensenats (§ 32 Abs 1 letzter Satz StPO) ist mit 31. Dezember 2015 in den Ruhestand getreten. Rechtliche Beurteilung Die Urteilsverkündung vom 25. September 2015 steht - wie die Generalprokuratur in ihrer zur Wahrung des Gesetzes erhobenen Nichtigkeitsbeschwerde zutreffend ausführt - hinsichtlich des Schuldspruchs A./I./ mit dem Gesetz nicht im Einklang. Gemäß § 257 erster Satz StPO hat sich das Schöffengericht nach Schluss der Verhandlung zur Urteilsfällung in das Beratungszimmer zurückzuziehen. Dort erfolgen demzufolge Beratung und Abstimmung (Lendl, WK-StPO § 257 Rz 4). Zu verkünden ist dann das in der Beratung beschlossene Urteil mit allen in § 260 Abs 1 Z 1 bis 5 und Abs 2 StPO genannten Punkten (Danek, WK-StPO § 268 Rz 1 und 7). Vorliegend gelangten die Tatrichter nach der Beratung - wovon der an den gegenteiligen Inhalt des Beratungsprotokolls nicht gebundene (vgl Ratz, WK-StPO § 281 Rz 312 und § 292 Rz 6) Oberste Gerichtshof aufgrund des Aktenvermerks des Vorsitzenden ausgeht - zum Ergebnis, der Reinheitsgehalt des zu A./I./ angenommenen Suchtgiftquantums von 600 Gramm Heroin betrage nicht 15,59 %, sondern nur etwa 10 %. Demnach wurde lediglich das Verbrechen des Suchtgifthandels nach § 28a Abs 1 fünfter Fall, Abs 2 Z 3 SMG als verwirklicht angesehen und dem Angeklagten die Privilegierung nach § 28a Abs 3 zweiter Fall SMG zugebilligt. Bei dem vom Vorsitzenden in der Verkündung (§ 260 Abs 1 Z 1 StPO) angenommenen Reinheitsgehalt von (zumindest) 15,59 % würden 600 Gramm Heroin allerdings eine Suchtgiftmenge darstellen, die das 25-fache der Grenzmenge (§ 28b SMG) überschreitet und daher die Qualifikation des § 28a Abs 4 Z 3 SMG begründet. Da im Schöffenverfahren jenes Urteil zu verkünden ist, welches nach Beratung vom Schöffensenat beschlossen wurde, bewirkte der bezeichnete Vorgang einen Verstoß gegen § 268 erster Satz StPO. Der Vorsitzende hat durch die Verkündung einer vom gefällten Urteil abweichenden Variante des Tatgeschehens eine ihm nicht zustehende Kompetenz in Anspruch genommen (vgl RIS-Justiz RS0116267). Die Gesetzesverletzung war festzustellen. Es ist nicht auszuschließen, dass der Vorgang der verfehlten Verkündung eines die rechtliche Unterstellung der Taten (auch) nach Abs 2 Z 3 Abs 3 zweiter Fall des § 28a SMG nicht tragenden Reinheitsgehalts von 15,59 % dem Angeklagten zum Nachteil gereicht, weil die Staatsanwaltschaft das Urteil angefochten und auf Basis der vom Vorsitzenden aus seinem Fehler abgeleiteten (demnach ebenso nicht der Beschlussfassung des Schöffengerichts entsprechenden) Urteilsfeststellungen die Bestrafung des Angeklagten nach § 28a Abs 4 Z 3 SMG begehrt hat. Der Oberste Gerichtshof sah sich zur Anordnung konkreter Wirkung veranlasst (§ 292 letzter Satz StPO). In einem solchen Fall wäre es grundsätzlich ausreichend, das verkündete Urteil (im entsprechenden Umfang) zur Klarstellung zu beseitigen und - ohne Anordnung einer neuen Hauptverhandlung - dem Erstgericht aufzutragen, das tatsächlich beschlossene Urteil neu zu verkünden (vgl Danek, WK-StPO § 268 Rz 10). Bei dieser neuen Urteilsverkündung müssten alle Mitglieder des - (zumal ein Fall des § 43 Abs 2 letzter Satzteil StPO nicht vorliegt:) seinerzeitigen - Schöffensenats anwesend sein (Danek, WK-StPO § 268 Rz 3). Diesem Erfordernis steht jedoch der inzwischen angetretene Ruhestand des Vorsitzenden entgegen. Die Kaiserliche Verordnung vom 14. Dezember 1915, RGBl 1915/372, eignet sich nicht zur Behebung der vorliegenden Problemstellung, weil sie nicht die Verkündung, sondern nur die schriftliche Ausfertigung des Urteils betrifft (vgl Danek, WK-StPO § 270 Rz 3). Demgemäß waren die Unterstellung der dem Schuldspruch A./I./ zugrunde liegenden Taten auch unter Abs 2 Z 3 und Abs 3 zweiter Fall des § 28a SMG und der Strafausspruch über den Angeklagten C***** aufzuheben und es war in diesem Umfang die neue Verhandlung (vor einem neuen Spruchkörper) und Entscheidung anzuordnen. Bleibt anzumerken, dass sich selbst unter der Prämisse, die Divergenz zwischen beschlossenem und verkündetem Urteil beziehe sich auch auf den Zweit- und den Drittangeklagten (vgl Amtsvermerk erster Absatz: „in allen Punkten“), hinsichtlich dieser kein Bedarf für eine Maßnahme gemäß § 290 Abs 1 StPO ergibt, weil auch bei Annahme eines Reinheitsgehalts von etwa 10 % des von ihnen verhandelten Suchtgifts die Qualifikation des § 28a Abs 4 Z 3 SMG erfüllt wäre und sich sohin am Schuldspruch nichts ändern würde. Die Staatsanwaltschaft war mit ihrer Nichtigkeitsbeschwerde auf diese Entscheidung zu verweisen.",
-    "offset_ini": 0,
-    "offset_end": 11291
-}
-    '''
-
-    g = rdflib.Graph().parse(data=rdf_to_parse, format='json-ld')
-    n = NIFDocument.parse_rdf(g.serialize(format='n3'), format='n3')
-    print(n)
-    #
-    # print(f'Input: {rdf_to_parse}')
-    # parsed = NIFDocument.parse_rdf(rdf_to_parse, format='turtle')
-    # print(f'Parsed into NIFDocument')
-    # context_str = parsed.context.nif__is_string
-    # print(f'The nif:isString value: "{context_str}"')
-    # structs = parsed.annotations
-    # print(f'Number of annotations attached: {len(structs)}')
-    # assert len(structs) == 1
-    # ann = structs[0]
-    # print(f'nif:anchorOf: "{ann.nif__anchor_of}", '
-    #       f'itsrdf:taClassRef: "{ann.itsrdf__ta_class_ref}"')
-
-    # nifDocument = rdf_to_parse
-    # d = NIFDocument.parse_rdf(nifDocument, format='turtle')
-    # ann = NIFAnnotation(begin_end_index=(0, len(d.context.nif__is_string)))
-    # ann.nif__summary = "<your summary here>"
-    # d.add_annotations([ann])
+    pass
 
 

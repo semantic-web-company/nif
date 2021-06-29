@@ -58,7 +58,7 @@
         a                     nif:OffsetBasedString , nif:Word ;
         nif:anchorOf          "shark" ;
         nif:beginIndex        "26"^^xsd:nonNegativeInteger ;
-        nif:endIndex          "21"^^xsd:nonNegativeInteger ;
+        nif:endIndex          "31"^^xsd:nonNegativeInteger ;
         nif:nextWord          <http://example.com#offset_32_39> ;
         nif:previousWord      <http://example.com#offset_20_25> ;
         nif:referenceContext  <http://example.com#offset_0_39> ;
