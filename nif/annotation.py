@@ -817,8 +817,9 @@ class NIFDocument:
         ]
         sents = []
         for sent_data in sents_data:
+            print(sent_data, len(words))
             word_start = words[sent_data[0]]
-            word_end = words[sent_data[1]]
+            word_end = words[sent_data[1]-1]
             word_uris = [word.uri for word in words[sent_data[0]:sent_data[1]]]
             be = (word_start.nif__begin_index, word_end.nif__end_index)
             sent = NIFSentence(begin_end_index=be,

@@ -8,16 +8,17 @@ A package to help using [NIF](https://github.com/NLP2RDF/ontologies/blob/master/
 ### Create a `NIFDocument`.
 
 ```python
+import rdflib
 from nif.annotation import NIFDocument, SWCNIFNamedEntityOccurrence, SWCNIFChunk
 
 cxt_str = "Christian mentioned tiger shark hunting"
 i = 0
 words_data = []
 for w_str in cxt_str.split(' '):
-    be = (i, i+len(w_str))
+    be = (i, i + len(w_str))
     words_data.append(be)
     i += len(w_str) + 1
-sents_data = [(0, len(words_data)-1)]
+sents_data = [(0, len(words_data))]
 nif_doc = NIFDocument.from_data(cxt_str=cxt_str,
                                 words_data=words_data,
                                 sents_data=sents_data)
@@ -28,7 +29,7 @@ christian = SWCNIFNamedEntityOccurrence(
     reference_context=nif_doc.context,
     class_uri="http://dbpedia.org/resource/classes#Person"
 )
-nif_doc.phrases += christian
+nif_doc.phrases += [christian]
 # Noun Phrase
 np = SWCNIFChunk(
     begin_end_index=(20, 39),
@@ -36,7 +37,11 @@ np = SWCNIFChunk(
     chunk_type='NP',
     anchor_of='tiger shark hunting',
 )
-nif_doc.phrases += np
+nif_doc.phrases += [np]
+# add PoS tag
+nif_doc.words[3].nif__pos_tag = rdflib.Literal('NN')
+# print the result
+print(nif_doc.serialize(format='n3').decode())
 ```
 
 ### Create from triples.
