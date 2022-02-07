@@ -685,6 +685,7 @@ class SWCNIFNamedEntityOccurrence(NIFPhrase):
                  begin_end_index,
                  reference_context,
                  class_uri: str,
+                 property_uri: str = None,
                  confidence: float = None,
                  annotator_uri: str = None,
                  anchor_of=None,
@@ -693,9 +694,12 @@ class SWCNIFNamedEntityOccurrence(NIFPhrase):
             annotator_uri = rdflib.URIRef(annotator_uri)
         if class_uri is not None:
             class_uri = rdflib.URIRef(class_uri)
+        if property_uri is not None:
+            property_uri = rdflib.URIRef(property_uri)
         au = NIFAnnotationUnit(itsrdf__ta_class_ref=class_uri,
                                itsrdf__ta_confidence=confidence,
-                               itsrdf__ta_annotator_ref=annotator_uri)
+                               itsrdf__ta_annotator_ref=annotator_uri,
+                               itsrdf__ta_prop_ref=property_uri)
         super().__init__(
             reference_context=reference_context,
             begin_end_index=begin_end_index,
@@ -714,14 +718,18 @@ class SWCNIFMatchedResourceOccurrence(NIFPhrase):
                  confidence: float = None,
                  annotator_uri: str = None,
                  anchor_of=None,
+                 entity_class = None,
                  **kwargs):
         if annotator_uri is not None:
             annotator_uri = rdflib.URIRef(annotator_uri)
         if entity_uri is not None:
             entity_uri = rdflib.URIRef(entity_uri)
+        if entity_class is not None:
+            entity_class = rdflib.URIRef(entity_class)
         au = NIFAnnotationUnit(itsrdf__ta_ident_ref=entity_uri,
                                itsrdf__ta_confidence=confidence,
-                               itsrdf__ta_annotators_ref=annotator_uri)
+                               itsrdf__ta_annotators_ref=annotator_uri,
+                               itsrdf__ta_class_ref=entity_class)
         super().__init__(
             reference_context=reference_context,
             begin_end_index=begin_end_index, anchor_of=anchor_of,
@@ -910,6 +918,7 @@ class NIFDocument:
         ees = []
         for i, cpt_dict in enumerate(cpt_dicts):
             cpt_uri = cpt_dict['uri']
+            cpt_class = cpt_dict['class'] if "class" in cpt_dict.keys() else None
             for matches in cpt_dict['matchings']:
                 for match in matches['positions']:
                     surface_form = self.context.nif__is_string[match[0]:match[1]]
@@ -920,7 +929,8 @@ class NIFDocument:
                         entity_uri=cpt_uri,
                         annotator_uri=annotator_uri,
                         confidence=confidence,
-                        **kwargs
+                        entity_class=cpt_class,
+                    **kwargs
                     )
                     ees.append(ee)
         self.phrases += ees
