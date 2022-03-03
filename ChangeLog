@@ -1,6 +1,16 @@
 CHANGES
 =======
 
+v0.1.23
+-------
+
+* Remove rdflib, use calamus, speed up
+* Update README
+* Implement swcnif
+* Update
+* Add NIF classes, make String subclass of Annotation
+* Remove comma in namespace defintions
+
 v0.1.22
 -------
 
