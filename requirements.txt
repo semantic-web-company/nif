@@ -1,3 +1,2 @@
-rdflib
-nose
+calamus @ git+https://github.com/SwissDataScienceCenter/calamus.git@master
 pbr

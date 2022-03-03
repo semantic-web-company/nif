@@ -23,3 +23,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+/nif/tests/test_calamus.py
+/nif/examples/
+/nif/benchmark.py
+.pytest_cache/
