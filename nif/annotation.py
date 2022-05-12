@@ -79,11 +79,12 @@ class NIFAnnotationSchema(NIFBaseSchema):
 
 
 class NIFAnnotationUnit(NIFAnnotation):
-    def __init__(self, uri=None, confidence: float = None, class_ref=None, ident_ref=None, annotator_ref=None):
+    def __init__(self, uri=None, confidence: float = None, class_ref=None, ident_ref=None, annotator_ref=None, prop_ref=None):
         self.confidence = confidence
         self.class_ref = class_ref
         self.ident_ref = ident_ref
         self.annotator_ref = annotator_ref
+        self.prop_ref = prop_ref
         super(NIFAnnotationUnit, self).__init__(uri=uri)
 
 
@@ -92,6 +93,7 @@ class NIFAnnotationUnitSchema(NIFAnnotationSchema):
     class_ref = calamus.fields.IRI(itsrdf_ns.taClassRef, required=False)
     ident_ref = calamus.fields.IRI(itsrdf_ns.taIdentRef, required=False)
     annotator_ref = calamus.fields.IRI(itsrdf_ns.taAnnotatorRef, required=False)
+    prop_ref = calamus.fields.IRI(itsrdf_ns.taPropRef, required=False)
 
     class Meta:
         rdf_type = [nif_ns.AnnotationUnit]
@@ -293,6 +295,7 @@ class SWCNIFNamedEntityOccurrence(NIFPhrase):
                  class_uri: str,
                  confidence: float = None,
                  annotator_uri: str = None,
+                 property_uri: str = None,
                  anchor_of: str = None,
                  sentence_uri: str = None,
                  words_uris: List[str] = None):
@@ -303,7 +306,8 @@ class SWCNIFNamedEntityOccurrence(NIFPhrase):
                                                           words_uris=words_uris)
         au = NIFAnnotationUnit(class_ref=class_uri,
                                confidence=confidence,
-                               annotator_ref=annotator_uri)
+                               annotator_ref=annotator_uri,
+                               prop_ref=property_uri)
         self.annotation_units = [au]
 
 
@@ -321,6 +325,7 @@ class SWCNIFMatchedResourceOccurrence(NIFPhrase):
                  entity_uri: str,
                  confidence: float = None,
                  annotator_uri: str = None,
+                 entity_class = None,
                  anchor_of: str = None,
                  sentence_uri: str = None,
                  words_uris: List[str] = None):
@@ -331,7 +336,8 @@ class SWCNIFMatchedResourceOccurrence(NIFPhrase):
                                                               words_uris=words_uris)
         au = NIFAnnotationUnit(ident_ref=entity_uri,
                                confidence=confidence,
-                               annotator_ref=annotator_uri)
+                               annotator_ref=annotator_uri,
+                               class_ref=entity_class)
         self.annotation_units = [au]
 
 
