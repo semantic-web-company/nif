@@ -3,6 +3,7 @@ from typing import List, Tuple
 
 import calamus.schema, calamus.fields
 from marshmallow import post_dump
+from pyld import jsonld
 
 
 swcnif_ns = calamus.fields.Namespace('https://semantic-web.com/research/nif#')
@@ -356,9 +357,9 @@ class NIFDocument:
     @staticmethod
     def _parse_obj(json_obj):
         obj_types = json_obj["@type"]
-        if swcnif_ns.NamedEntityOccurrence in obj_types:
+        if swcnif_ns.NamedEntityOccurrence in obj_types or swcnif_ns.NamedEntity in obj_types:
             r = SWCNIFNamedEntityOccurrenceSchema().load(json_obj, unknown='INCLUDE')
-        elif swcnif_ns.MatchedResourceOccurrence in obj_types:
+        elif swcnif_ns.MatchedResourceOccurrence in obj_types or swcnif_ns.ExtractedEntity in obj_types:
             r = SWCNIFMatchedResourceOccurrenceSchema().load(json_obj, unknown='INCLUDE')
         elif swcnif_ns.Chunk in obj_types:
             r = SWCNIFChunkSchema().load(json_obj, unknown='INCLUDE')
@@ -381,6 +382,8 @@ class NIFDocument:
     @classmethod
     def from_json(cls, json_data):
         objs = dict()
+        if "@context" in json_data:
+            json_data = jsonld.expand(json_data)
         for obj in json_data:
             nif_obj = cls._parse_obj(obj)
             if nif_obj is not None:
@@ -390,5 +393,3 @@ class NIFDocument:
 
 if __name__ == '__main__':
     pass
-
-
