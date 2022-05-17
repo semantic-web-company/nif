@@ -349,46 +349,93 @@ class SWCNIFMatchedResourceOccurrenceSchema(NIFPhraseSchema):
 
 
 class NIFDocument:
-    def __init__(self):
-        self.words = []
-        self.sentences = []
-        self.phrases = []
+    """
+    attributes describe triples, for additional features, protected attributes are used
+    attributes should be dictionaries in the format uri: object, unless there is only one object
+    lists should be used for non-object triples
+    """
+    def __init__(self, context=None, words=None, sentences=None, phrases=None, other=None, schema_dict=None):
+        self.context = context
+        self.words = dict() if words is None else words
+        self.sentences = dict() if sentences is None else sentences
+        self.phrases = dict() if phrases is None else phrases
+        self.other = [] if other is None else other
+        self._schema_dict = dict() if schema_dict is None else schema_dict
+
+    def serialize(self):
+        json_objs = []
+        attributes = self.__dict__
+        for k, v in attributes.items():
+            if not k.startswith("_"):
+                if isinstance(v, dict):
+                    json_objs += [self._schema_dict[uri]().dump(obj) for uri, obj in v.items()]
+                elif isinstance(v,NIFBase):
+                    json_objs.append(self._schema_dict[v.uri]().dump(v))
+                elif isinstance(v, list):
+                    json_objs += v
+        return json_objs
+
 
     @staticmethod
     def _parse_obj(json_obj):
         obj_types = json_obj["@type"]
+        schema = None
         if swcnif_ns.NamedEntityOccurrence in obj_types or swcnif_ns.NamedEntity in obj_types:
-            r = SWCNIFNamedEntityOccurrenceSchema().load(json_obj, unknown='INCLUDE')
+            schema = SWCNIFNamedEntityOccurrenceSchema
         elif swcnif_ns.MatchedResourceOccurrence in obj_types or swcnif_ns.ExtractedEntity in obj_types:
-            r = SWCNIFMatchedResourceOccurrenceSchema().load(json_obj, unknown='INCLUDE')
+            schema = SWCNIFMatchedResourceOccurrenceSchema
         elif swcnif_ns.Chunk in obj_types:
-            r = SWCNIFChunkSchema().load(json_obj, unknown='INCLUDE')
+            schema = SWCNIFChunkSchema
         elif nif_ns.Sentence in obj_types:
-            r = NIFSentenceSchema().load(json_obj, unknown='INCLUDE')
+            schema = NIFSentenceSchema
         elif nif_ns.Word in obj_types:
-            r = NIFWordSchema().load(json_obj, unknown='INCLUDE')
+            schema = NIFWordSchema
         elif nif_ns.Phrase in obj_types:
-            r = NIFPhraseSchema().load(json_obj, unknown='INCLUDE')
+            schema = NIFPhraseSchema
         elif nif_ns.Context in obj_types:
-            r = NIFContextSchema().load(json_obj, unknown='INCLUDE')
+            schema = NIFContextSchema
         elif nif_ns.AnnotationUnit in obj_types:
-            r = NIFAnnotationUnitSchema().load(json_obj, unknown='INCLUDE')
+            schema = NIFAnnotationUnitSchema
         elif nif_ns.Annotation in obj_types:
-            r = NIFAnnotationSchema().load(json_obj, unknown='INCLUDE')
-        else:
-            r = None
-        return r
+            schema = NIFAnnotationSchema
+        #else:
+        #    #todo annotations that are not known are removed?
+        #    r = None
+        if schema:
+            json_obj = schema().load(json_obj, unknown='INCLUDE')
+        return json_obj, schema
 
     @classmethod
     def from_json(cls, json_data):
-        objs = dict()
+        # todo schema_dict should be more secure to keep in sync
+        schema_dict = dict()
+        phrases = dict()
+        sentences = dict()
+        words = dict()
+        context = None
+        others = []
+
         if "@context" in json_data:
             json_data = jsonld.expand(json_data)
         for obj in json_data:
-            nif_obj = cls._parse_obj(obj)
+            nif_obj, schema = cls._parse_obj(obj)
             if nif_obj is not None:
-                objs[nif_obj.uri] = nif_obj
-        return objs
+                if isinstance(nif_obj,NIFContext):
+                    #todo is it allowed to have more contexts?
+                    context = nif_obj
+                elif isinstance(nif_obj, NIFPhrase):
+                    phrases[nif_obj.uri] = nif_obj
+                elif isinstance(nif_obj, NIFSentence):
+                    sentences[nif_obj.uri] = nif_obj
+                elif isinstance(nif_obj, NIFWord):
+                    words[nif_obj.uri] = nif_obj
+                elif isinstance(nif_obj, dict):
+                    others.append(nif_obj)
+                else:
+                    raise NotImplementedError
+                if schema is not None:
+                    schema_dict[nif_obj.uri] = schema
+        return cls(context=context, words=words, sentences=sentences, phrases=phrases, other=others, schema_dict=schema_dict)
 
 
 if __name__ == '__main__':
