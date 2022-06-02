@@ -1,9 +1,31 @@
 from enum import Enum
 from typing import List, Tuple
+from collections import defaultdict
+import copy
 
 import calamus.schema, calamus.fields
 from marshmallow import post_dump
 from pyld import jsonld
+
+def _merge_dicts(obj1: dict, obj2 :dict, value_strategy="refuse", list_strategy="merge"):
+    merged_obj = copy.deepcopy(obj1)
+    for k,v in obj2.items():
+        if k in merged_obj.keys():
+            if isinstance(v, list) and isinstance(merged_obj[k], list) and list_strategy=="merge":
+                merged_obj[k] += [x for x in v if x not in merged_obj[k]]
+            elif isinstance(v, list) and list_strategy=="merge":
+                if merged_obj[k] not in v:
+                    merged_obj[k] = [merged_obj[k]] + v
+            elif isinstance(merged_obj[k], list) and list_strategy=="merge":
+                if v not in merged_obj[k]:
+                    merged_obj[k].append(v)
+            elif v == merged_obj[k]:
+                pass
+            elif value_strategy=="refuse":
+                raise ValueError(f"Refused to merge objects, key {k} leads to different values {obj1[k]} and {obj2[k]}")
+        else:
+            merged_obj[k] = v
+    return merged_obj
 
 
 swcnif_ns = calamus.fields.Namespace('https://semantic-web.com/research/nif#')
@@ -380,10 +402,18 @@ class NIFDocument:
         attributes = self.__dict__
         for k, v in attributes.items():
             if not k.startswith("_"):
+                # elements in the schema
                 if isinstance(v, dict):
-                    json_objs += [self._schema_dict[uri]().dump(obj) for uri, obj in v.items()]
-                elif isinstance(v,NIFBase):
-                    json_objs.append(self._schema_dict[v.uri]().dump(v))
+                    for uri, objs in v.items():
+                        merged_json_obj = None
+                        for i, obj in enumerate(objs):
+                            json_obj = self._schema_dict[uri][i]().dump(obj)
+                            if merged_json_obj is None:
+                                merged_json_obj = json_obj
+                            else:
+                                merged_json_obj = _merge_dicts(merged_json_obj, json_obj)
+                        json_objs.append(merged_json_obj)
+                # other elements
                 elif isinstance(v, list):
                     json_objs += v
         return json_objs
@@ -392,62 +422,66 @@ class NIFDocument:
     @staticmethod
     def _parse_obj(json_obj):
         obj_types = json_obj["@type"]
-        schema = None
+        schemas = []
+        json_objs = []
         if swcnif_ns.NamedEntityOccurrence in obj_types or swcnif_ns.NamedEntity in obj_types:
-            schema = SWCNIFNamedEntityOccurrenceSchema
-        elif swcnif_ns.MatchedResourceOccurrence in obj_types or swcnif_ns.ExtractedEntity in obj_types:
-            schema = SWCNIFMatchedResourceOccurrenceSchema
-        elif swcnif_ns.Chunk in obj_types:
-            schema = SWCNIFChunkSchema
-        elif nif_ns.Sentence in obj_types:
-            schema = NIFSentenceSchema
-        elif nif_ns.Word in obj_types:
-            schema = NIFWordSchema
-        elif nif_ns.Phrase in obj_types:
-            schema = NIFPhraseSchema
-        elif nif_ns.Context in obj_types:
-            schema = NIFContextSchema
-        elif nif_ns.AnnotationUnit in obj_types:
-            schema = NIFAnnotationUnitSchema
-        elif nif_ns.Annotation in obj_types:
-            schema = NIFAnnotationSchema
-        #else:
-        #    #todo annotations that are not known are removed?
-        #    r = None
-        if schema:
-            json_obj = schema().load(json_obj, unknown='INCLUDE')
-        return json_obj, schema
+            schemas.append(SWCNIFNamedEntityOccurrenceSchema)
+        if swcnif_ns.MatchedResourceOccurrence in obj_types or swcnif_ns.ExtractedEntity in obj_types:
+            schemas.append(SWCNIFMatchedResourceOccurrenceSchema)
+        if not schemas:
+            if swcnif_ns.Chunk in obj_types:
+                schemas.append(SWCNIFChunkSchema)
+            elif nif_ns.Sentence in obj_types:
+                schemas.append(NIFSentenceSchema)
+            elif nif_ns.Word in obj_types:
+                schemas.append(NIFWordSchema)
+            elif nif_ns.Phrase in obj_types:
+                schemas.append(NIFPhraseSchema)
+            elif nif_ns.Context in obj_types:
+                schemas.append(NIFContextSchema)
+            elif nif_ns.AnnotationUnit in obj_types:
+                schemas.append(NIFAnnotationUnitSchema)
+            elif nif_ns.Annotation in obj_types:
+                schemas.append(NIFAnnotationSchema)
+            else:
+                schemas.append(None)
+        for schema in schemas:
+            if schema is not None:
+                json_objs.append(schema().load(json_obj, unknown='INCLUDE'))
+            else:
+                json_objs.append(json_obj)
+        return json_objs, schemas
 
     @classmethod
     def from_json(cls, json_data):
         # todo schema_dict should be more secure to keep in sync
-        schema_dict = dict()
-        phrases = dict()
-        sentences = dict()
-        words = dict()
-        context = None
+        schema_dict = defaultdict(list)
+        phrases = defaultdict(list)
+        sentences = defaultdict(list)
+        words = defaultdict(list)
+        context = defaultdict(list)
         others = []
 
         if "@context" in json_data:
             json_data = jsonld.expand(json_data)
         for obj in json_data:
-            nif_obj, schema = cls._parse_obj(obj)
-            if nif_obj is not None:
-                if isinstance(nif_obj,NIFContext):
-                    #todo is it allowed to have more contexts?
-                    context = nif_obj
-                elif isinstance(nif_obj, NIFPhrase):
-                    phrases[nif_obj.uri] = nif_obj
-                elif isinstance(nif_obj, NIFSentence):
-                    sentences[nif_obj.uri] = nif_obj
-                elif isinstance(nif_obj, NIFWord):
-                    words[nif_obj.uri] = nif_obj
-                elif isinstance(nif_obj, dict):
-                    others.append(nif_obj)
-                else:
-                    raise NotImplementedError
-                if schema is not None:
-                    schema_dict[nif_obj.uri] = schema
+            nif_objs, schemas = cls._parse_obj(obj)
+            for nif_obj, schema in zip(nif_objs, schemas):
+                if nif_obj is not None:
+                    if isinstance(nif_obj,NIFContext):
+                        context[nif_obj.uri].append(nif_obj)
+                    elif isinstance(nif_obj, NIFPhrase):
+                        phrases[nif_obj.uri].append(nif_obj)
+                    elif isinstance(nif_obj, NIFSentence):
+                        sentences[nif_obj.uri].append(nif_obj)
+                    elif isinstance(nif_obj, NIFWord):
+                        words[nif_obj.uri].append(nif_obj)
+                    elif isinstance(nif_obj, dict):
+                        others.append(nif_obj)
+                    else:
+                        raise NotImplementedError
+                    if schema is not None:
+                        schema_dict[nif_obj.uri].append(schema)
         return cls(context=context, words=words, sentences=sentences, phrases=phrases, other=others, schema_dict=schema_dict)
 
 
