@@ -299,17 +299,24 @@ class SWCNIFNamedEntityOccurrence(NIFPhrase):
                  property_uri: str = None,
                  anchor_of: str = None,
                  sentence_uri: str = None,
-                 words_uris: List[str] = None):
+                 words_uris: List[str] = None,
+                 annotation_units: List[NIFAnnotationUnit] = None):
         super(SWCNIFNamedEntityOccurrence, self).__init__(reference_context_uri=reference_context_uri,
                                                           begin_index=begin_index, end_index=end_index,
                                                           anchor_of=anchor_of,
                                                           sentence_uri=sentence_uri,
                                                           words_uris=words_uris)
-        au = NIFAnnotationUnit(class_ref=class_uri,
-                               confidence=confidence,
-                               annotator_ref=annotator_uri,
-                               prop_ref=property_uri)
-        self.annotation_units = [au]
+
+        self.annotation_units = []
+        annotation_units = annotation_units if annotation_units is not None else []
+        annotation_units.append(NIFAnnotationUnit(class_ref=class_uri,
+                                               confidence=confidence,
+                                               annotator_ref=annotator_uri,
+                                               prop_ref=property_uri))
+        for au in annotation_units:
+            if au.class_ref is not None:
+                self.annotation_units.append(au)
+
 
 
 class SWCNIFNamedEntityOccurrenceSchema(NIFPhraseSchema):
@@ -329,17 +336,23 @@ class SWCNIFMatchedResourceOccurrence(NIFPhrase):
                  entity_class = None,
                  anchor_of: str = None,
                  sentence_uri: str = None,
-                 words_uris: List[str] = None):
+                 words_uris: List[str] = None,
+                 annotation_units: List[NIFAnnotationUnit] = None):
         super(SWCNIFMatchedResourceOccurrence, self).__init__(reference_context_uri=reference_context_uri,
                                                               begin_index=begin_index, end_index=end_index,
                                                               anchor_of=anchor_of,
                                                               sentence_uri=sentence_uri,
                                                               words_uris=words_uris)
-        au = NIFAnnotationUnit(ident_ref=entity_uri,
-                               confidence=confidence,
-                               annotator_ref=annotator_uri,
-                               class_ref=entity_class)
-        self.annotation_units = [au]
+
+        self.annotation_units = []
+        annotation_units = annotation_units if annotation_units is not None else []
+        annotation_units.append(NIFAnnotationUnit(ident_ref=entity_uri,
+                                                  confidence=confidence,
+                                                  annotator_ref=annotator_uri,
+                                                  class_ref=entity_class))
+        for au in annotation_units:
+            if au.ident_ref is not None:
+                self.annotation_units.append(au)
 
 
 class SWCNIFMatchedResourceOccurrenceSchema(NIFPhraseSchema):
