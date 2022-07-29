@@ -112,12 +112,12 @@ class TestWord:
         #                         reference_context_uri=self.cxt.uri,
         #                         previous_word_uri=prev_word.uri)
 
-    # def test_incorrect_anchor(self):
-    #     with pytest.raises(NIFError):
-    #         word = NIFWord(reference_context_uri=self.cxt.uri,
-    #                        begin_index=0,
-    #                        end_index=5,
-    #                        anchor_of='some', )
+    def test_incorrect_anchor_len(self):
+         with pytest.raises(NIFError):
+             word = NIFWord(reference_context_uri=self.cxt.uri,
+                            begin_index=0,
+                            end_index=5,
+                            anchor_of='some')
 
     def test_next_word_before_this_word(self):
         next_word = NIFWord(begin_index=4,
@@ -354,8 +354,11 @@ class TestEntityOccurrence:
         nw_dump = SWCNIFMatchedResourceOccurrenceSchema().dump(nw)
         nw_uri = nw_dump['@id']
         assert 'offset' in nw_uri, f'URI = {nw_uri} is not an OffsetBasedString'
+        # begin and end index
+        # anchors
         ref_cxt = nw_dump[nif_ns.referenceContext]
         assert ref_cxt is not None
+        assert ref_cxt == self.cxt.uri
         aus = nw_dump[nif_ns.annotationUnit]
         assert len(aus) == 1, aus
         au = aus[0]
