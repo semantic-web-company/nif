@@ -1,2 +1,3 @@
-calamus @ git+https://github.com/SwissDataScienceCenter/calamus.git@master
+#calamus @ git+https://github.com/SwissDataScienceCenter/calamus.git@master
+calamus @ git+https://github.com/annabreit/calamus.git@master
 pbr
