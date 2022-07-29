@@ -1,32 +1,14 @@
+import warnings
+from collections import defaultdict
 from enum import Enum
 from typing import List, Tuple
-from collections import defaultdict
-import copy
 
-import calamus.schema, calamus.fields
-from marshmallow import post_dump
+import calamus.fields
+import calamus.schema
+from marshmallow import post_dump, INCLUDE
 from pyld import jsonld
 
-def _merge_dicts(obj1: dict, obj2 :dict, value_strategy="refuse", list_strategy="merge"):
-    merged_obj = copy.deepcopy(obj1)
-    for k,v in obj2.items():
-        if k in merged_obj.keys():
-            if isinstance(v, list) and isinstance(merged_obj[k], list) and list_strategy=="merge":
-                merged_obj[k] += [x for x in v if x not in merged_obj[k]]
-            elif isinstance(v, list) and list_strategy=="merge":
-                if merged_obj[k] not in v:
-                    merged_obj[k] = [merged_obj[k]] + v
-            elif isinstance(merged_obj[k], list) and list_strategy=="merge":
-                if v not in merged_obj[k]:
-                    merged_obj[k].append(v)
-            elif v == merged_obj[k]:
-                pass
-            elif value_strategy=="refuse":
-                raise ValueError(f"Refused to merge objects, key {k} leads to different values {obj1[k]} and {obj2[k]}")
-        else:
-            merged_obj[k] = v
-    return merged_obj
-
+from nif import utils
 
 swcnif_ns = calamus.fields.Namespace('https://semantic-web.com/research/nif#')
 nif_ns = calamus.fields.Namespace('http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#')
@@ -79,6 +61,7 @@ class NIFBaseSchema(calamus.schema.JsonLDSchema):
     uri = calamus.fields.Id()
 
     class Meta:
+        unknown = INCLUDE
         rdf_type = None
         model = NIFBase
 
@@ -97,12 +80,14 @@ class NIFAnnotation(NIFBase):
 
 class NIFAnnotationSchema(NIFBaseSchema):
     class Meta:
+        unknown = INCLUDE
         rdf_type = nif_ns.Annotation
         model = NIFAnnotation
 
 
 class NIFAnnotationUnit(NIFAnnotation):
-    def __init__(self, uri=None, confidence: float = None, class_ref=None, ident_ref=None, annotator_ref=None, prop_ref=None):
+    def __init__(self, uri=None, confidence: float = None, class_ref=None, ident_ref=None, annotator_ref=None,
+                 prop_ref=None):
         self.confidence = confidence
         self.class_ref = class_ref
         self.ident_ref = ident_ref
@@ -119,8 +104,10 @@ class NIFAnnotationUnitSchema(NIFAnnotationSchema):
     prop_ref = calamus.fields.IRI(itsrdf_ns.taPropRef, required=False)
 
     class Meta:
+        unknown = INCLUDE
         rdf_type = [nif_ns.AnnotationUnit]
         model = NIFAnnotationUnit
+        inherit_parent_types = False
 
 
 class NIFContext(NIFBase):
@@ -147,6 +134,7 @@ class NIFContextSchema(NIFBaseSchema):
     is_string = calamus.fields.String(nif_ns.isString)
 
     class Meta:
+        unknown = INCLUDE
         rdf_type = nif_ns.Context
         model = NIFContext
 
@@ -160,11 +148,13 @@ class NIFString(NIFBase):
                  annotation_units: List[NIFAnnotationUnit] = None):
         self.begin_index, self.end_index = begin_index, end_index
         self.reference_context_uri = reference_context_uri
+        self.anchor_of = anchor_of
+        if anchor_of and len(anchor_of) != end_index-begin_index:
+            raise NIFError(f"Annotation indices ({begin_index}, {end_index}) do not match anchor length {anchor_of}")
+        self.annotation_units = annotation_units
         uri = apply_uri_scheme(uri_prefix=reference_context_uri,
                                begin_end_index=(begin_index, end_index))
         super(NIFString, self).__init__(uri=uri)
-        self.anchor_of = anchor_of
-        self.annotation_units = annotation_units
 
     def validate(self):
         return True
@@ -179,6 +169,7 @@ class NIFStringSchema(NIFBaseSchema):
                                              required=False, many=True)
 
     class Meta:
+        unknown = INCLUDE
         rdf_type = [nif_ns.String, nif_ns.OffsetBasedString]
         model = NIFString
 
@@ -189,6 +180,7 @@ class NIFStructure(NIFString):
 
 class NIFStructureSchema(NIFStringSchema):
     class Meta:
+        unknown = INCLUDE
         rdf_type = nif_ns.Structure
         model = NIFStructure
 
@@ -224,6 +216,7 @@ class NIFWordSchema(NIFStructureSchema):
     sentence_uri = calamus.fields.IRI(nif_ns.sentence, required=False)
 
     class Meta:
+        unknown = INCLUDE
         rdf_type = nif_ns.Word
         model = NIFWord
 
@@ -253,6 +246,7 @@ class NIFSentenceSchema(NIFStructureSchema):
                                      required=False)
 
     class Meta:
+        unknown = INCLUDE
         rdf_type = nif_ns.Sentence
         model = NIFSentence
 
@@ -279,6 +273,7 @@ class NIFPhraseSchema(NIFStructureSchema):
     sentence_uri = calamus.fields.IRI(nif_ns.sentence, required=False)
 
     class Meta:
+        unknown = INCLUDE
         rdf_type = nif_ns.Phrase
         model = NIFPhrase
 
@@ -304,12 +299,13 @@ class SWCNIFChunkSchema(NIFPhraseSchema):
     chunk_type = calamus.fields.String(swcnif_ns.chunkType, required=False)
 
     class Meta:
+        unknown = INCLUDE
         rdf_type = swcnif_ns.Chunk
         model = SWCNIFChunk
 
 
 class SWCNIFNamedEntityOccurrence(NIFPhrase):
-    rdf_classes = (swcnif_ns.NamedEntity, nif_ns.Phrase)
+    rdf_classes = (swcnif_ns.NamedEntityOccurrence, nif_ns.Phrase)
 
     def __init__(self,
                  begin_index: int,
@@ -340,11 +336,12 @@ class SWCNIFNamedEntityOccurrence(NIFPhrase):
                 self.annotation_units.append(au)
 
 
-
 class SWCNIFNamedEntityOccurrenceSchema(NIFPhraseSchema):
     class Meta:
+        unknown = INCLUDE
         rdf_type = swcnif_ns.NamedEntityOccurrence
         model = SWCNIFNamedEntityOccurrence
+        inherit_parent_types = False
 
 
 class SWCNIFMatchedResourceOccurrence(NIFPhrase):
@@ -379,55 +376,99 @@ class SWCNIFMatchedResourceOccurrence(NIFPhrase):
 
 class SWCNIFMatchedResourceOccurrenceSchema(NIFPhraseSchema):
     class Meta:
+        unknown = INCLUDE
         rdf_type = swcnif_ns.MatchedResourceOccurrence
         model = SWCNIFMatchedResourceOccurrence
+        inherit_parent_types = False
 
 
 class NIFDocument:
-    """
-    attributes describe triples, for additional features, protected attributes are used
-    attributes should be dictionaries in the format uri: object, unless there is only one object
-    lists should be used for non-object triples
-    """
+    class NifDocElements():
+        """
+        - attributes should be dictionaries in the format uri: [object]
+        - lists should be used for non-object triples
+        - attributes should be altered via dedicated functions (set_element, append_element)
+        not directly (e.g., element.attribute[id]=value)
+        """
+
+        def __init__(self, context=None, words=None, sentences=None, phrases=None, other=None, ):
+            self._context = defaultdict(list) if context is None else defaultdict(list, context)
+            self._words = defaultdict(list) if words is None else defaultdict(list, words)
+            self._sentences = defaultdict(list) if sentences is None else defaultdict(list, sentences)
+            self._phrases = defaultdict(list) if phrases is None else defaultdict(list, phrases)
+            self._other = [] if other is None else other
+
     def __init__(self, context=None, words=None, sentences=None, phrases=None, other=None, schema_dict=None):
-        self.context = context
-        self.words = dict() if words is None else words
-        self.sentences = dict() if sentences is None else sentences
-        self.phrases = dict() if phrases is None else phrases
-        self.other = [] if other is None else other
-        self._schema_dict = dict() if schema_dict is None else schema_dict
+        self.elements = self.NifDocElements(context=context, words=words, sentences=sentences, phrases=phrases,
+                                            other=other)
+        self._schema_dict = defaultdict(list) if schema_dict is None else defaultdict(list, schema_dict)
+
+
+    def set_element(self, attribute, values, schemas_dict=None):
+        if attribute in ["context", "words", "sentences", "phrases"]:
+            self.elements.__setattr__(attribute, values)
+            self._schema_dict.update(schemas_dict)
+        elif attribute == "other":
+            self.elements._other = values
+        else:
+            raise NotImplementedError(f"Attribute {attribute} not in {self.elements.__dict__.items()}")
+
+
+    def append_element(self, attribute, value, schema=None):
+        if attribute in ["context", "words", "sentences", "phrases"]:
+            if schema is None:
+                raise ValueError("You must provide a schema for the value to be appended.")
+            _id = value.uri
+            self.elements.__getattribute__("_" + attribute)[_id].append(value)
+            self._schema_dict[_id].append(schema)
+        elif attribute == "other":
+            self.elements._other.append(value)
+        else:
+            raise NotImplementedError(f"Attribute {attribute} not in {self.elements.__dict__.items()}")
+
+    #todo remove_element
 
     def serialize(self):
         json_objs = []
-        attributes = self.__dict__
+        attributes = self.elements.__dict__
         for k, v in attributes.items():
-            if not k.startswith("_"):
-                # elements in the schema
-                if isinstance(v, dict):
-                    for uri, objs in v.items():
-                        merged_json_obj = None
-                        for i, obj in enumerate(objs):
-                            json_obj = self._schema_dict[uri][i]().dump(obj)
-                            if merged_json_obj is None:
-                                merged_json_obj = json_obj
-                            else:
-                                merged_json_obj = _merge_dicts(merged_json_obj, json_obj)
-                        json_objs.append(merged_json_obj)
-                # other elements
-                elif isinstance(v, list):
-                    json_objs += v
+            # elements in the schema
+            if isinstance(v, dict):
+                for uri, objs in v.items():
+                    merged_json_obj = None
+                    for i, obj in enumerate(objs):
+                        json_obj = self._schema_dict[uri][i]().dump(obj)
+                        if merged_json_obj is None:
+                            merged_json_obj = json_obj
+                        else:
+                            merged_json_obj = utils._merge_dicts(merged_json_obj, json_obj)
+                    json_objs.append(merged_json_obj)
+            # other elements
+            elif isinstance(v, list):
+                json_objs += v
         return json_objs
 
 
     @staticmethod
-    def _parse_obj(json_obj):
+    def _parse_obj(json_obj, all_objs=None):
+        """
+        provides all schemas and associated json-objects to a given object
+        an associated json-object is e.g., an object, which is referenced by @id in json-object in a
+        flattened file format
+        :param json_obj: focus json object
+        :param all_objs: all json objects of the json-ld doc
+        :return: relevant json_objs associated with json_obj, schemas associated with json_obj
+        """
         obj_types = json_obj["@type"]
         schemas = []
         json_objs = []
+        check_for_flattened = False
         if swcnif_ns.NamedEntityOccurrence in obj_types or swcnif_ns.NamedEntity in obj_types:
             schemas.append(SWCNIFNamedEntityOccurrenceSchema)
+            check_for_flattened = True
         if swcnif_ns.MatchedResourceOccurrence in obj_types or swcnif_ns.ExtractedEntity in obj_types:
             schemas.append(SWCNIFMatchedResourceOccurrenceSchema)
+            check_for_flattened = True
         if not schemas:
             if swcnif_ns.Chunk in obj_types:
                 schemas.append(SWCNIFChunkSchema)
@@ -440,14 +481,18 @@ class NIFDocument:
             elif nif_ns.Context in obj_types:
                 schemas.append(NIFContextSchema)
             elif nif_ns.AnnotationUnit in obj_types:
-                schemas.append(NIFAnnotationUnitSchema)
+                pass  # this should  be handled by the specific annotations
             elif nif_ns.Annotation in obj_types:
-                schemas.append(NIFAnnotationSchema)
+                pass  # this should  be handled by the specific annotations
             else:
                 schemas.append(None)
+        if check_for_flattened:
+            json_obj, all_objs, ids = utils._flatten_references_to_external_resources(json_obj, all_objs)
+            json_obj = [all_objs[i] for i in ids]
+
         for schema in schemas:
             if schema is not None:
-                json_objs.append(schema().load(json_obj, unknown='INCLUDE'))
+                json_objs.append(schema(flattened=True).load(json_obj))
             else:
                 json_objs.append(json_obj)
         return json_objs, schemas
@@ -464,11 +509,12 @@ class NIFDocument:
 
         if "@context" in json_data:
             json_data = jsonld.expand(json_data)
+        obj_dict = {o["@id"]: o for o in json_data}
         for obj in json_data:
-            nif_objs, schemas = cls._parse_obj(obj)
+            nif_objs, schemas = cls._parse_obj(obj, obj_dict)
             for nif_obj, schema in zip(nif_objs, schemas):
                 if nif_obj is not None:
-                    if isinstance(nif_obj,NIFContext):
+                    if isinstance(nif_obj, NIFContext):
                         context[nif_obj.uri].append(nif_obj)
                     elif isinstance(nif_obj, NIFPhrase):
                         phrases[nif_obj.uri].append(nif_obj)
@@ -482,7 +528,17 @@ class NIFDocument:
                         raise NotImplementedError
                     if schema is not None:
                         schema_dict[nif_obj.uri].append(schema)
-        return cls(context=context, words=words, sentences=sentences, phrases=phrases, other=others, schema_dict=schema_dict)
+        return cls(context=context, words=words, sentences=sentences, phrases=phrases, other=others,
+                   schema_dict=schema_dict)
+
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            self.serialize()
+            other.serialize()
+            return self.serialize() == other.serialize()
+        else:
+            return False
 
 
 if __name__ == '__main__':
