@@ -146,7 +146,7 @@ class NIFString(NIFBase):
                  end_index: int,
                  anchor_of: str = None,
                  annotation_units: List[NIFAnnotationUnit] = None):
-        self.begin_index, self.end_index = begin_index, end_index
+        self.begin_index, self.end_index = int(begin_index), int(end_index)
         self.reference_context_uri = reference_context_uri
         self.anchor_of = anchor_of
         if anchor_of and len(anchor_of) != end_index-begin_index:
