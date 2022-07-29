@@ -149,7 +149,7 @@ class NIFString(NIFBase):
         self.begin_index, self.end_index = int(begin_index), int(end_index)
         self.reference_context_uri = reference_context_uri
         self.anchor_of = anchor_of
-        if anchor_of and len(anchor_of) != end_index-begin_index:
+        if self.anchor_of and len(self.anchor_of) != self.end_index - self.begin_index:
             raise NIFError(f"Annotation indices ({begin_index}, {end_index}) do not match anchor length {anchor_of}")
         self.annotation_units = annotation_units
         uri = apply_uri_scheme(uri_prefix=reference_context_uri,
@@ -328,9 +328,9 @@ class SWCNIFNamedEntityOccurrence(NIFPhrase):
         self.annotation_units = []
         annotation_units = annotation_units if annotation_units is not None else []
         annotation_units.append(NIFAnnotationUnit(class_ref=class_uri,
-                                               confidence=confidence,
-                                               annotator_ref=annotator_uri,
-                                               prop_ref=property_uri))
+                                                  confidence=confidence,
+                                                  annotator_ref=annotator_uri,
+                                                  prop_ref=property_uri))
         for au in annotation_units:
             if au.class_ref is not None:
                 self.annotation_units.append(au)
@@ -497,6 +497,7 @@ class NIFDocument:
                 json_objs.append(json_obj)
         return json_objs, schemas
 
+
     @classmethod
     def from_json(cls, json_data):
         # todo schema_dict should be more secure to keep in sync
@@ -542,4 +543,97 @@ class NIFDocument:
 
 
 if __name__ == '__main__':
-    pass
+    import json
+
+    with open("examples/even_simpler_file.json", "r") as f:
+        bod = json.load(f)
+    test_json = {
+        "@context": {
+            "nif": "http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#"
+        },
+        "@graph": [
+
+            {
+                "@id": "file:///some/file/path#offset_0_91",
+                "@type": [
+                    "nif:Context"
+                ],
+                "https://semantic-web.com/research/nif#annotations": [
+                    {
+                        "@id": "file:///some/file/path#offset_70_78"
+                    }
+                ],
+                "nif:beginIndex": {
+                    "@type": "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                    "@value": "0"
+                },
+                "nif:endIndex": {
+                    "@type": "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                    "@value": "91"
+                },
+                "nif:isString": "This is the title of the document\n\nAnd here we have a sentence with Entity A and Entity B"
+            },
+
+            {
+                "@id": "file:///some/file/path#offset_70_78",
+                "@type": [
+                    "http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#OffsetBasedString",
+                    "http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#Phrase",
+                    "http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#String",
+                    "http://persistence.uni-leipzig.org/nlp2rdf/ontologies/nif-core#Structure",
+                    "https://semantic-web.com/research/nif#MatchedResourceOccurrence"
+                ],
+                "nif:anchorOf": "Entity A",
+                "nif:beginIndex": {
+                    "@type": "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                    "@value": "70"
+                },
+                "nif:endIndex": {
+                    "@type": "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                    "@value": "78"
+                },
+                "nif:referenceContext": "file:///some/file/path#offset_0_91",
+                "nif:annotationUnit": {
+                    "@id": "_:N4dd8cfc53f52477fb2d726eda6571a7a"
+                }
+            },
+            {
+                "@id": "_:N4dd8cfc53f52477fb2d726eda6571a7a",
+                "@type": ["nif:AnnotationUnit", "nif:Annotation"],
+                "http://www.w3.org/2005/11/its/rdf#taAnnotatorRef": "http://obaris.org/ns/service/ne-roles-service",
+                "http://www.w3.org/2005/11/its/rdf#taClassRef": "https://w3id.org/obaris/ns/permit#ConceptAnnotation",
+                "http://www.w3.org/2005/11/its/rdf#taIdentRef": "https://custom-apps.poolparty.biz/OBARIStest/9"
+            }
+
+        ]
+    }
+
+    if "@context" in test_json:
+        bod = jsonld.expand(test_json)
+
+    #obj = SWCNIFMatchedResourceOccurrenceSchema(flattened=True).load(bod)
+    n = NIFDocument()
+
+
+    n = NIFDocument.from_json(bod)
+
+    print(n.elements._phrases)
+    #n.append_element("phrases", obj, SWCNIFMatchedResourceOccurrenceSchema)
+    print(n.elements._phrases)
+    n.phrases = "foo"
+    json_elements = n.serialize()
+
+
+    re_load = NIFDocument.from_json(json_elements)
+
+    # au_class = "OBARIS_BASE_URI" + "Operator"
+    # checkme ALL types are provided when serialising
+    # todo additional types will be removed
+    # checkme additional fields in parsed object
+    # ke = SWCNIFMatchedResourceOccurrence(reference_context_uri=nif_doc.context,begin_end_index=(0, 10),entity_uri="foo:bar")
+
+    # nif_doc.phrases += [ke]
+
+    # have extracted entities as phrases
+    # nif_ns = ns_dict['nif']
+    # swcnif_ns = rdflib.Namespace('https://semantic-web.com/research/nif#')
